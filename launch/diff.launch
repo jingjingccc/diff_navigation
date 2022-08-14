@@ -1,0 +1,4 @@
+<launch>
+    <node pkg="diff_navigation" type="diff_controller" name="diff_controller" output="screen">
+    </node>
+</launch>
