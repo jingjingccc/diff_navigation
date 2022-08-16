@@ -48,6 +48,7 @@ private:
     std::vector<RobotPose> global_path;
 
     RobotPose rollingwindow(RobotPose cur);
+    bool set_goal_as_localgoal;
     double circularMotion_R;
     void diff_controller(RobotPose localgoal, RobotPose cur);
     double velocityProfile(double vel, int direction);
@@ -77,6 +78,7 @@ private:
     double countdistance(RobotPose pose1, RobotPose pose2);
     bool if_xy_reached(RobotPose cur, RobotPose goal);
     bool if_theta_reached(RobotPose cur, RobotPose goal);
+    bool xy_reached;
     int signDetermine(double a);
 
     // param

@@ -18,12 +18,12 @@ void pathTracking::initialize()
     timer_.start();
     mode = MODE::IDLE;
     past_mode = MODE::IDLE;
-
+    set_goal_as_localgoal = false;
     while (!ros::service::waitForService("/move_base/make_plan", ros::Duration(3.0)))
     {
         ROS_INFO("Waiting for service /move_base/make_plan to become available");
     }
-
+    xy_reached = false;
     ROS_INFO("Initialized!");
 }
 
@@ -35,18 +35,18 @@ bool pathTracking::initialparam(std_srvs::Empty::Request &req, std_srvs::Empty::
     get_param_ok = nh_local_.param<bool>("active", p_active_, true);
     get_param_ok = nh_local_.param<double>("control_frequency", control_frequency_, 70);
     get_param_ok = nh_local_.param<double>("lookahead_distance", lookahead_distance_, 0.3);
-    get_param_ok = nh_local_.param<double>("robot_L", robot_L_, 0.15);
+    get_param_ok = nh_local_.param<double>("robot_L", robot_L_, 0.3);
     get_param_ok = nh_local_.param<double>("xy_tolerance", xy_tolerance_, 0.02);
-    get_param_ok = nh_local_.param<double>("linear_max_vel", linear_max_vel_, 0.5);
-    get_param_ok = nh_local_.param<double>("linear_acceleration", linear_acceleration_, 0.2);
-    get_param_ok = nh_local_.param<double>("linear_kp", linear_kp_, 0.7);
+    get_param_ok = nh_local_.param<double>("linear_max_vel", linear_max_vel_, 0.8);
+    get_param_ok = nh_local_.param<double>("linear_acceleration", linear_acceleration_, 0.3);
+    get_param_ok = nh_local_.param<double>("linear_kp", linear_kp_, 0.8);
     get_param_ok = nh_local_.param<double>("linear_brake_distance", linear_brake_distance_, 0.15);
     get_param_ok = nh_local_.param<double>("linear_min_brake_distance", linear_min_brake_distance_, 0.25);
     get_param_ok = nh_local_.param<double>("linear_brake_distance_ratio", linear_brake_distance_ratio_, 0.3);
     get_param_ok = nh_local_.param<double>("theta_tolerance", theta_tolerance_, 0.03);
-    get_param_ok = nh_local_.param<double>("angular_max_vel", angular_max_vel_, 0.8);
+    get_param_ok = nh_local_.param<double>("angular_max_vel", angular_max_vel_, 3.0);
     get_param_ok = nh_local_.param<double>("angular_acceleration", angular_acceleration_, 0.15);
-    get_param_ok = nh_local_.param<double>("angular_kp", angular_kp_, 0.15);
+    get_param_ok = nh_local_.param<double>("angular_kp", angular_kp_, 1.5);
     get_param_ok = nh_local_.param<double>("angular_brake_distance", angular_brake_distance_, 0.15);
     get_param_ok = nh_local_.param<double>("angular_min_brake_distance", angular_min_brake_distance_, 0.15);
     get_param_ok = nh_local_.param<double>("angular_brake_distance_ratio", angular_brake_distance_ratio_, 0.15);
@@ -99,6 +99,7 @@ void pathTracking::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
     }
     pathRequest(cur_pose, goal_pose);
     switchMode(MODE::PATH_RECEIVED);
+    xy_reached = false;
 }
 
 void pathTracking::poseCallback(const nav_msgs::Odometry::ConstPtr &msg) // base_pose_ground_truth
@@ -225,72 +226,82 @@ RobotPose pathTracking::rollingwindow(RobotPose cur)
     RobotPose local_goal, past_local_goal;
     if (countdistance(cur_pose, goal_pose) < lookahead_distance_ + 0.2)
     {
+        ROS_INFO("** special on the path");
         local_goal = goal_pose;
-        return local_goal;
-    }
-
-    bool localgoal_found = false;
-    int flag = 1, past_flag = 1;
-    for (int i = 0; i < global_path.size(); i++)
-    {
-        past_flag = flag;
-        if (countdistance(cur, global_path[i]) > lookahead_distance_) // exterior
-            flag = 1;
-        else // interior
-            flag = 0;
-        if (flag - past_flag == 1)
-        {
-            local_goal = global_path[i];
-            past_local_goal = global_path[i - 1];
-            localgoal_found = true;
-            break;
-        }
-    }
-
-    if (localgoal_found)
-    {
-        local_goal.x = (local_goal.x + past_local_goal.x) / 2;
-        local_goal.y = (local_goal.y + past_local_goal.y) / 2;
-        // local_goal.theta = (local_goal.theta + past_local_goal.theta) / 2;
+        set_goal_as_localgoal = true;
     }
     else
     {
-        double mindis = 100, past_dis, dis = 0;
+        bool localgoal_found = false;
+        int flag = 1, past_flag = 1;
         for (int i = 0; i < global_path.size(); i++)
         {
-            past_dis = dis;
-            dis = countdistance(cur, global_path[i]);
-            if (mindis > countdistance(cur, global_path[i]))
+            past_flag = flag;
+            if (countdistance(cur, global_path.at(i)) >= lookahead_distance_)
+                flag = 1; // exterior
+            else
+                flag = 0; // interior
+
+            if (flag - past_flag == 1)
             {
-                local_goal = global_path[i];
-                mindis = countdistance(cur, global_path[i]);
+                local_goal = global_path.at(i);
+                past_local_goal = global_path.at(i - 1);
+                localgoal_found = true;
+                ROS_INFO("on the path");
+                break;
             }
+        }
+
+        if (localgoal_found)
+        {
+            local_goal.x = (local_goal.x + past_local_goal.x) / 2;
+            local_goal.y = (local_goal.y + past_local_goal.y) / 2;
+        }
+        else
+        {
+            ROS_INFO("NOT on the path");
+            double mindis = 10000, past_dis, dis = 0;
+            for (int i = 0; i < global_path.size(); i++)
+            {
+                past_dis = dis;
+                dis = countdistance(cur, global_path.at(i));
+                if (mindis > dis)
+                {
+                    local_goal = global_path.at(i);
+                    mindis = dis;
+                }
+            }
+        }
+        if (local_goal.x == goal_pose.x && local_goal.y == goal_pose.y)
+        {
+            set_goal_as_localgoal = true;
         }
     }
 
-    geometry_msgs::PoseStamped local;
-    local.header.stamp = ros::Time::now();
-    local.header.frame_id = "map";
-    local.pose.position.x = local_goal.x;
-    local.pose.position.y = local_goal.y;
-    local.pose.position.z = 0;
-    tf2::Quaternion q;
-    q.setRPY(0, 0, local_goal.theta);
-    local.pose.orientation.x = q.x();
-    local.pose.orientation.y = q.y();
-    local.pose.orientation.z = q.z();
-    local.pose.orientation.w = q.w();
-    localgoal_pub.publish(local);
+    // geometry_msgs::PoseStamped local;
+    // local.header.stamp = ros::Time::now();
+    // local.header.frame_id = "map";
+    // local.pose.position.x = local_goal.x;
+    // local.pose.position.y = local_goal.y;
+    // local.pose.position.z = 0;
+    // tf2::Quaternion q;
+    // q.setRPY(0, 0, local_goal.theta);
+    // local.pose.orientation.x = q.x();
+    // local.pose.orientation.y = q.y();
+    // local.pose.orientation.z = q.z();
+    // local.pose.orientation.w = q.w();
+    // localgoal_pub.publish(local);
     return local_goal;
 }
 
 void pathTracking::diff_controller(RobotPose localgoal, RobotPose cur)
 {
-    // count circular motion radius R
-    // (robot line, cur_pose, localgoal)
+    // count circular motion radius R // (robot line, cur_pose, localgoal)
+
     RobotPose robotLine, center;
-    robotLine.x = cos(cur.theta);
-    robotLine.y = sin(cur.theta);
+    robotLine.x = sin(cur.theta) / cos(cur.theta);
+    robotLine.y = -1;
+    robotLine.theta = robotLine.x * cur.x + robotLine.y * cur.y;
     if (robotLine.x == 0) // vertical -> horizon
     {
         center.y = cur.y;
@@ -304,48 +315,98 @@ void pathTracking::diff_controller(RobotPose localgoal, RobotPose cur)
     else
     {
         // ax+by=c
-        double a = robotLine.y;
-        double b = -1 * robotLine.x;
+        double a = -1 * robotLine.y;
+        double b = robotLine.x;
         double c = a * cur.x + b * cur.y;
         center.x = (pow(cur.x, 2) + pow(cur.y, 2) - pow(localgoal.x, 2) - pow(localgoal.y, 2) - 2 * (cur.y - localgoal.y) * c / b) / (2 * (cur.x - localgoal.x) - 2 * (cur.y - localgoal.y) * a / b);
         center.y = (c - a * center.x) / b;
     }
     circularMotion_R = countdistance(center, cur);
 
-    // rotate direction
-    double alpha = atan((localgoal.y - cur_pose.y) / (localgoal.x - cur_pose.x));
-    int rotate_direction = 0;
-    if (sin(cur_pose.theta - alpha) > 0)
-        rotate_direction = 1;
-    else
-        rotate_direction = -1;
-
-    // velocity
-    // direction
+    // direction  go_forward_or_backward
     int go_forward_or_backward = 0;
-    // RobotPose localline;
-    // localline.x = (localgoal.x - cur.x) / countdistance(localgoal, cur);
-    // localline.y = (localgoal.y - cur.y) / countdistance(localgoal, cur);
-    // if (angleLimiting(acos(localline.x * robotLine.x + localline.y * robotLine.y)) > M_PI / 2)
-    // {
-    //     go_forward_or_backward = -1;
-    // }
-    // else
-    // {
-    //     go_forward_or_backward = 1;
-    // }
-    if (signDetermine(localgoal.y - cur.y) == signDetermine(robotLine.y))
-    {
-        go_forward_or_backward = -1;
-    }
-    else
+    RobotPose vertical_robotLine;
+    vertical_robotLine.x = 1;
+    vertical_robotLine.y = robotLine.x;
+    vertical_robotLine.theta = vertical_robotLine.x * cur.x + vertical_robotLine.y * cur.y;
+    RobotPose fake;
+    fake.x = cur.x + cos(cur.theta);
+    fake.y = cur.y + sin(cur.theta);
+    double local_ = vertical_robotLine.x * localgoal.x + vertical_robotLine.y * localgoal.y - vertical_robotLine.theta;
+    double fake_ = vertical_robotLine.x * fake.x + vertical_robotLine.y * fake.y - vertical_robotLine.theta;
+    if (local_ > 0 && fake_ > 0 || local_ < 0 && fake_ < 0)
     {
         go_forward_or_backward = 1;
     }
-    ROS_INFO("go_forward_or_backward  =  %d", go_forward_or_backward);
-    double v = (velocity.x + velocity.y) / 2; // last
-    if (if_xy_reached(cur, goal_pose))
+    else
     {
+        go_forward_or_backward = -1;
+    }
+    ROS_INFO("go_forward_or_backward  =  %d", go_forward_or_backward);
+
+    // localgoal_theta // count the slope : center, localgoal
+    if (!xy_reached)
+    {
+        double slope = (localgoal.y - center.y) / (localgoal.x - center.x);
+        localgoal.theta = atan2(-1, slope);
+        RobotPose vec_cur, vec_local;
+        vec_cur.x = (cur.x - center.x) / countdistance(cur, center);
+        vec_cur.y = (cur.y - center.y) / countdistance(cur, center);
+        vec_local.x = (localgoal.x - center.x) / countdistance(localgoal, center);
+        vec_local.y = (localgoal.y - center.y) / countdistance(localgoal, center);
+        double angle = acos(vec_cur.x * vec_local.x + vec_cur.y * vec_local.y);
+        if (!(fabs(cur.theta - localgoal.theta) > angle - 0.03 && fabs(cur.theta - localgoal.theta) < angle + 0.03))
+        {
+            localgoal.theta = angleLimiting(atan2(-1, slope) + M_PI);
+        }
+    }
+    else
+    {
+        localgoal.theta = goal_pose.theta;
+    }
+
+    geometry_msgs::PoseStamped local;
+    local.header.stamp = ros::Time::now();
+    local.header.frame_id = "map";
+    local.pose.position.x = localgoal.x;
+    local.pose.position.y = localgoal.y;
+    local.pose.position.z = 0;
+    tf2::Quaternion q;
+    q.setRPY(0, 0, localgoal.theta);
+    local.pose.orientation.x = q.x();
+    local.pose.orientation.y = q.y();
+    local.pose.orientation.z = q.z();
+    local.pose.orientation.w = q.w();
+    localgoal_pub.publish(local);
+
+    // rotate direction
+    int rotate_direction = 0;
+    // double value = robotLine.x * localgoal.x + robotLine.y * localgoal.y - robotLine.theta;
+    // ROS_INFO("value = %f", value);
+    // if ((value < 0 && go_forward_or_backward == 1) || (value > 0 && go_forward_or_backward == -1))
+    // {
+    //     rotate_direction = 1; // counter clock-wise
+    // }
+    // else
+    // {
+    //     rotate_direction = -1; // clock-wise
+    // }
+
+    double fake_x = cos(localgoal.theta);
+    double fake_y = sin(localgoal.theta);
+    double cross = cos(cur.theta) * fake_y - sin(cur.theta) * fake_x;
+    if (cross > 0)
+        rotate_direction = 1;
+    else
+        rotate_direction = -1;
+    ROS_INFO("rotate_direction  =  %d", rotate_direction);
+
+    // velocity
+    // linear
+    double v = (velocity.x + velocity.y) / 2; // last
+    if (if_xy_reached(cur_pose, goal_pose))
+    {
+        xy_reached = true;
         velocity.x = 0;
         velocity.y = 0;
     }
@@ -356,13 +417,27 @@ void pathTracking::diff_controller(RobotPose localgoal, RobotPose cur)
         velocity.x = (2 * output_v + output_v * robot_L_ / circularMotion_R) / 2;
         velocity.y = (2 * output_v - output_v * robot_L_ / circularMotion_R) / 2;
     }
-    if (if_xy_reached(cur, goal_pose) && if_theta_reached(cur, goal_pose))
+    // angular
+    if (if_xy_reached(cur_pose, goal_pose))
     {
-        velocity.theta = 0;
+        if (if_theta_reached(cur_pose, goal_pose))
+        {
+            velocity.theta = 0;
+            switchMode(MODE::IDLE);
+        }
+        else
+        {
+            double theta_err = fabs(angleLimiting(cur_pose.theta - goal_pose.theta));
+            ROS_INFO("theta_errrrrrrrr = %f", fabs(angleLimiting(cur_pose.theta - goal_pose.theta)));
+            ROS_INFO("kp = %f", angular_kp_);
+            velocity.theta = theta_err * angular_kp_;
+            ROS_INFO("ppppp %f", velocity.theta);
+            velocity.theta *= rotate_direction;
+        }
     }
     else
     {
-        velocity.theta = (velocity.x - velocity.y) / robot_L_;
+        velocity.theta = fabs(velocity.x - velocity.y) / robot_L_;
         if (velocity.theta > angular_max_vel_)
         {
             velocity.theta = angular_max_vel_;
@@ -447,7 +522,10 @@ bool pathTracking::if_xy_reached(RobotPose cur, RobotPose goal)
 
 bool pathTracking::if_theta_reached(RobotPose cur, RobotPose goal)
 {
-    if (theta_tolerance_ >= fabs(cur.theta - goal.theta))
+    ROS_INFO("cur theta = %f", cur.theta);
+    ROS_INFO("goal theta = %f", goal.theta);
+    ROS_INFO("theta_err = %f", fabs(angleLimiting(cur.theta - goal.theta)));
+    if (theta_tolerance_ >= fabs(angleLimiting(cur.theta - goal.theta)))
         return true;
     else
         return false;
