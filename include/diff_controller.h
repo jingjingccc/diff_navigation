@@ -11,7 +11,7 @@
 #include "geometry_msgs/Twist.h"
 #include "geometry_msgs/PoseStamped.h"
 #include "std_srvs/Empty.h"
-
+#include "std_msgs/Bool.h"
 using namespace std;
 
 enum class MODE
@@ -34,8 +34,9 @@ class pathTracking
 {
 public:
     pathTracking(ros::NodeHandle &nh, ros::NodeHandle &nh_local);
+    ~pathTracking();
     void initialize();
-    bool initialparam(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
+    bool initializeParams(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
 
 private:
     ros::NodeHandle nh_;

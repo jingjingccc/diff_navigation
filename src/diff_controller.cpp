@@ -4,10 +4,10 @@ pathTracking::pathTracking(ros::NodeHandle &nh, ros::NodeHandle &nh_local)
 {
     nh_ = nh;
     nh_local_ = nh_local;
-    std_srvs::Empty empty;
+    std_srvs::Empty e;
     p_active_ = false;
-    params_srv_ = nh_local_.advertiseService("params", &pathTracking::initialparam, this);
-    initialparam(empty.request, empty.response);
+    params_srv_ = nh_local_.advertiseService("/params", &pathTracking::initializeParams, this);
+    initializeParams(e.request, e.response);
     initialize();
 }
 
@@ -19,43 +19,67 @@ void pathTracking::initialize()
     mode = MODE::IDLE;
     past_mode = MODE::IDLE;
     set_goal_as_localgoal = false;
+    xy_reached = false;
     while (!ros::service::waitForService("/move_base/make_plan", ros::Duration(3.0)))
     {
         ROS_INFO("Waiting for service /move_base/make_plan to become available");
     }
-    xy_reached = false;
+
     ROS_INFO("Initialized!");
 }
 
-bool pathTracking::initialparam(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
+pathTracking::~pathTracking()
+{
+    nh_local_.deleteParam("/active");
+    nh_local_.deleteParam("/control_frequency");
+    nh_local_.deleteParam("/lookahead_distance");
+    nh_local_.deleteParam("/robot_L");
+    nh_local_.deleteParam("/xy_tolerance");
+    nh_local_.deleteParam("/linear_max_vel");
+    nh_local_.deleteParam("/linear_acceleration");
+    nh_local_.deleteParam("/linear_kp");
+    nh_local_.deleteParam("/linear_brake_distance");
+    nh_local_.deleteParam("/linear_min_brake_distance");
+    nh_local_.deleteParam("/linear_brake_distance_ratio");
+    nh_local_.deleteParam("/theta_tolerance");
+    nh_local_.deleteParam("/angular_max_vel");
+    nh_local_.deleteParam("/angular_acceleration");
+    nh_local_.deleteParam("/angular_kp");
+    nh_local_.deleteParam("/angular_brake_distance");
+    nh_local_.deleteParam("/angular_min_brake_distance");
+    nh_local_.deleteParam("/angular_brake_distance_ratio");
+}
+
+bool pathTracking::initializeParams(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 {
     bool get_param_ok = true;
     bool prev_active = p_active_;
 
-    get_param_ok = nh_local_.param<bool>("active", p_active_, true);
-    get_param_ok = nh_local_.param<double>("control_frequency", control_frequency_, 70);
-    get_param_ok = nh_local_.param<double>("lookahead_distance", lookahead_distance_, 0.3);
-    get_param_ok = nh_local_.param<double>("robot_L", robot_L_, 0.3);
-    get_param_ok = nh_local_.param<double>("xy_tolerance", xy_tolerance_, 0.02);
-    get_param_ok = nh_local_.param<double>("linear_max_vel", linear_max_vel_, 0.8);
-    get_param_ok = nh_local_.param<double>("linear_acceleration", linear_acceleration_, 0.3);
-    get_param_ok = nh_local_.param<double>("linear_kp", linear_kp_, 0.8);
-    get_param_ok = nh_local_.param<double>("linear_brake_distance", linear_brake_distance_, 0.15);
-    get_param_ok = nh_local_.param<double>("linear_min_brake_distance", linear_min_brake_distance_, 0.25);
-    get_param_ok = nh_local_.param<double>("linear_brake_distance_ratio", linear_brake_distance_ratio_, 0.3);
-    get_param_ok = nh_local_.param<double>("theta_tolerance", theta_tolerance_, 0.03);
-    get_param_ok = nh_local_.param<double>("angular_max_vel", angular_max_vel_, 3.0);
-    get_param_ok = nh_local_.param<double>("angular_acceleration", angular_acceleration_, 0.15);
-    get_param_ok = nh_local_.param<double>("angular_kp", angular_kp_, 1.5);
-    get_param_ok = nh_local_.param<double>("angular_brake_distance", angular_brake_distance_, 0.15);
-    get_param_ok = nh_local_.param<double>("angular_min_brake_distance", angular_min_brake_distance_, 0.15);
-    get_param_ok = nh_local_.param<double>("angular_brake_distance_ratio", angular_brake_distance_ratio_, 0.15);
+    get_param_ok = nh_local_.param<bool>("/active", p_active_, true);
+    get_param_ok = nh_local_.param<double>("/control_frequency", control_frequency_, 70);
+    get_param_ok = nh_local_.param<double>("/lookahead_distance", lookahead_distance_, 0.3);
+    get_param_ok = nh_local_.param<double>("/robot_L", robot_L_, 0.3);
+
+    get_param_ok = nh_local_.param<double>("/xy_tolerance", xy_tolerance_, 0.02);
+    get_param_ok = nh_local_.param<double>("/linear_max_vel", linear_max_vel_, 0.8);
+    get_param_ok = nh_local_.param<double>("/linear_acceleration", linear_acceleration_, 0.3);
+    get_param_ok = nh_local_.param<double>("/linear_kp", linear_kp_, 0.8);
+    get_param_ok = nh_local_.param<double>("/linear_brake_distance", linear_brake_distance_, 0.15);
+    get_param_ok = nh_local_.param<double>("/linear_min_brake_distance", linear_min_brake_distance_, 0.25);
+    get_param_ok = nh_local_.param<double>("/linear_brake_distance_ratio", linear_brake_distance_ratio_, 0.3);
+
+    get_param_ok = nh_local_.param<double>("/theta_tolerance", theta_tolerance_, 0.03);
+    get_param_ok = nh_local_.param<double>("/angular_max_vel", angular_max_vel_, 3.0);
+    get_param_ok = nh_local_.param<double>("/angular_acceleration", angular_acceleration_, 0.15);
+    get_param_ok = nh_local_.param<double>("/angular_kp", angular_kp_, 1.5);
+    get_param_ok = nh_local_.param<double>("/angular_brake_distance", angular_brake_distance_, 0.15);
+    get_param_ok = nh_local_.param<double>("/angular_min_brake_distance", angular_min_brake_distance_, 0.15);
+    get_param_ok = nh_local_.param<double>("/angular_brake_distance_ratio", angular_brake_distance_ratio_, 0.15);
 
     if (p_active_ != prev_active)
     {
         if (p_active_)
         {
-            // pub // sub
             vel_pub = nh_.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
             localgoal_pub = nh_.advertise<geometry_msgs::PoseStamped>("/local_goal", 10);
             pose_sub = nh_.subscribe("/base_pose_ground_truth", 10, &pathTracking::poseCallback, this);
@@ -64,6 +88,7 @@ bool pathTracking::initialparam(std_srvs::Empty::Request &req, std_srvs::Empty::
         else
         {
             vel_pub.shutdown();
+            localgoal_pub.shutdown();
             pose_sub.shutdown();
             goal_sub.shutdown();
         }
@@ -71,11 +96,11 @@ bool pathTracking::initialparam(std_srvs::Empty::Request &req, std_srvs::Empty::
 
     if (get_param_ok)
     {
-        ROS_INFO("Path Tracker set param ok");
+        ROS_INFO("set param ok");
     }
     else
     {
-        ROS_INFO("Path Tracker set param failed");
+        ROS_WARN_STREAM("set param failed");
     }
     return true;
 }
@@ -535,8 +560,9 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "diff_controller");
     ros::NodeHandle nh("");
-    ros::NodeHandle nh_local;
-    pathTracking pathTracking(nh, nh_local);
+    ros::NodeHandle nh_local("~");
+    pathTracking pathTracking_(nh, nh_local);
+
     while (ros::ok())
     {
         ros::spin();

@@ -15,8 +15,8 @@ linear_brake_distance_ratio: 0.3
 # angular
 theta_tolerance: 0.03
 angular_max_vel: 3.0
-# angular_acceleration: 0.15
-angular_kp: 1.5
-# angular_brake_distance: 0.15
-# angular_min_brake_distance: 0.15
-# angular_brake_distance_ratio: 0.15
+angular_acceleration: 0.15
+angular_kp: 2.0
+angular_brake_distance: 0.15
+angular_min_brake_distance: 0.15
+angular_brake_distance_ratio: 0.15
