@@ -10,6 +10,7 @@
 #include "nav_msgs/GetPlan.h"
 #include "geometry_msgs/Twist.h"
 #include "geometry_msgs/PoseStamped.h"
+#include "geometry_msgs/PoseWithCovarianceStamped.h"
 #include "std_srvs/Empty.h"
 #include "std_msgs/Bool.h"
 using namespace std;
@@ -65,7 +66,8 @@ private:
 
     // subscriber
     ros::Subscriber pose_sub;
-    void poseCallback(const nav_msgs::Odometry::ConstPtr &msg);
+    // void poseCallback(const nav_msgs::Odometry::ConstPtr &msg); //base_pose_ground_truth
+    void poseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &pose_msg); // ekf_pose
     ros::Subscriber goal_sub;
     void goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg);
 

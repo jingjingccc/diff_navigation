@@ -82,7 +82,8 @@ bool pathTracking::initializeParams(std_srvs::Empty::Request &req, std_srvs::Emp
         {
             vel_pub = nh_.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
             localgoal_pub = nh_.advertise<geometry_msgs::PoseStamped>("/local_goal", 10);
-            pose_sub = nh_.subscribe("/base_pose_ground_truth", 10, &pathTracking::poseCallback, this);
+            // pose_sub = nh_.subscribe("/base_pose_ground_truth", 10, &pathTracking::poseCallback, this);
+            pose_sub = nh_.subscribe("/ekf_pose", 10, &pathTracking::poseCallback, this);
             goal_sub = nh_.subscribe("/nav_goal", 10, &pathTracking::goalCallback, this);
         }
         else
@@ -127,7 +128,19 @@ void pathTracking::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
     xy_reached = false;
 }
 
-void pathTracking::poseCallback(const nav_msgs::Odometry::ConstPtr &msg) // base_pose_ground_truth
+// void pathTracking::poseCallback(const nav_msgs::Odometry::ConstPtr &msg) // base_pose_ground_truth
+// {
+//     cur_pose.x = msg->pose.pose.position.x;
+//     cur_pose.y = msg->pose.pose.position.y;
+//     tf2::Quaternion q;
+//     tf2::fromMsg(msg->pose.pose.orientation, q);
+//     tf2::Matrix3x3 qt(q);
+//     double _, yaw;
+//     qt.getRPY(_, _, yaw);
+//     cur_pose.theta = yaw;
+// }
+
+void pathTracking::poseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &msg) // base_pose_ground_truth
 {
     cur_pose.x = msg->pose.pose.position.x;
     cur_pose.y = msg->pose.pose.position.y;
