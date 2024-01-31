@@ -1,0 +1,9 @@
+map_type: costmap
+
+#footprint:
+robot_radius: 0.15
+inflation_radius: 0.4
+# car radius : 0.15
+
+# static_layer:
+#   map_topic: /actual_map

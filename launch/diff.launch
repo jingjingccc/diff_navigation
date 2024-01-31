@@ -1,6 +1,59 @@
 <launch>
+    <param name="use_sim_time" value="true"/>
+    <arg name="init_x_" default="0.5" />
+    <arg name="init_y_" default="0.5" /> 
+    <arg name="init_yaw_" default="0.0" /> 
 
-    <node pkg="diff_navigation" type="diff_controller" name="diff_controller" output="screen"/>
-    <rosparam file="$(find diff_navigation)/params/param.yaml" command="load" />
+    <!-- stage -->
+    <node pkg="stage_ros" type="stageros" name="stageros" args="$(find stage_simulation)/stage/eurobot_beacon.world" output="screen">
+        <remap from="base_scan" to="scan"/>
+    </node>
+
+    <!-- map tf -->
+    <node name="map_odom" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 0 0 0 1 map odom"/>
+    <node name="odom_base_footprint" pkg="tf2_ros" type="static_transform_publisher" args="0.5 0.5 0 0 0 0 1 odom base_footprint"/>
+
+    <!-- map_file -->
+    <arg name="map_file" default="$(find stage_simulation)/maps/eurobot_map/empty_map.yaml"/>
+    
+    <!-- map server -->
+    <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)" />
+
+    <!-- rviz -->
+    <node type="rviz" name="rviz" pkg="rviz" args="-d $(find stage_simulation)/rviz/ideal.rviz" />
+
+    <!-- gloabol planner -->
+    <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+        <param name="base_global_planner" value="global_planner/GlobalPlanner"/>
+        <rosparam file="$(find diff_navigation)/params/costmap_common_params.yaml" command="load" ns="global_costmap" />
+        <rosparam file="$(find diff_navigation)/params/costmap_common_params.yaml" command="load" ns="local_costmap" />
+        <rosparam file="$(find diff_navigation)/params/local_costmap_param.yaml" command="load" />
+        <rosparam file="$(find diff_navigation)/params/global_costmap_param.yaml" command="load" />
+        <!-- <remap from="map" to="map_" /> -->
+    </node>
+
+
+    <!-- pure_pursuit (omni) -->
+    <!-- <node pkg="robot_navigation" type="Holomonic_controller.py" name="pure_pursuit" output="screen"> -->
+    <!-- <node pkg="robot_navigation" type="Holomonic_controller_goal.py" name="pure_pursuit_goal" output="screen"/> -->
+    <!-- <node pkg="robot_navigation" type="Holomonic_controller_main.py" name="pure_pursuit_main" output="screen"/> -->
+    <!-- <node name="path_tracker" pkg="robot_navigation" type="pathTracker" output="screen"> -->
+    <!-- <node pkg="robot_navigation" type="pathTracker" name="pure_pursuit" output="screen"> -->
+    <!-- <node pkg="robot_navigation" type="pathTracker" name="pure_pursuit" output="screen"> -->
+    <!-- <node pkg="robot_navigation" type="pathTracker_plus" name="pure_pursuit" output="screen">
+        <rosparam file="$(find robot_navigation)/params/pathTracker.yaml" command="load" />
+    </node>     -->
+
+    <!-- differential -->
+    <!-- <node pkg="diff_navigation" type="diff_controller" name="diff_controller" output="screen">
+        <rosparam file="$(find diff_navigation)/params/param.yaml" command="load" />
+    </node> -->
+    <node pkg="diff_navigation" type="diff_controller_plus" name="diff_controller_plus" output="screen">
+        <rosparam file="$(find diff_navigation)/params/param.yaml" command="load" />
+    </node>
+
+    <include file="$(find obstacle_detector)/launch/nodes.launch"/>
+
+    <node name="ekf_localization" pkg="ekf_localization" type="ekf_holonomic.py" />
 
 </launch>

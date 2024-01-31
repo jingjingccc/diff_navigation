@@ -155,6 +155,10 @@ add_executable(diff_controller src/diff_controller.cpp)
 add_dependencies(diff_controller ${catkin_EXPORTED_TARGETS})
 target_link_libraries(diff_controller ${catkin_LIBRARIES})
 
+add_executable(diff_controller_plus src/diff_controller_plus.cpp)
+add_dependencies(diff_controller_plus ${catkin_EXPORTED_TARGETS})
+target_link_libraries(diff_controller_plus ${catkin_LIBRARIES})
+
 #############
 ## Install ##
 #############
