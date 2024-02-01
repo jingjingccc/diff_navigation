@@ -32,18 +32,6 @@
         <!-- <remap from="map" to="map_" /> -->
     </node>
 
-
-    <!-- pure_pursuit (omni) -->
-    <!-- <node pkg="robot_navigation" type="Holomonic_controller.py" name="pure_pursuit" output="screen"> -->
-    <!-- <node pkg="robot_navigation" type="Holomonic_controller_goal.py" name="pure_pursuit_goal" output="screen"/> -->
-    <!-- <node pkg="robot_navigation" type="Holomonic_controller_main.py" name="pure_pursuit_main" output="screen"/> -->
-    <!-- <node name="path_tracker" pkg="robot_navigation" type="pathTracker" output="screen"> -->
-    <!-- <node pkg="robot_navigation" type="pathTracker" name="pure_pursuit" output="screen"> -->
-    <!-- <node pkg="robot_navigation" type="pathTracker" name="pure_pursuit" output="screen"> -->
-    <!-- <node pkg="robot_navigation" type="pathTracker_plus" name="pure_pursuit" output="screen">
-        <rosparam file="$(find robot_navigation)/params/pathTracker.yaml" command="load" />
-    </node>     -->
-
     <!-- differential -->
     <!-- <node pkg="diff_navigation" type="diff_controller" name="diff_controller" output="screen">
         <rosparam file="$(find diff_navigation)/params/param.yaml" command="load" />

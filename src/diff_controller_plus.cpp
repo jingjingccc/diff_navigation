@@ -31,24 +31,22 @@ void pathTracking::initialize()
 
 pathTracking::~pathTracking()
 {
-    nh_local_.deleteParam("/active");
-    nh_local_.deleteParam("/control_frequency");
-    nh_local_.deleteParam("/lookahead_distance");
-    nh_local_.deleteParam("/robot_L");
-    nh_local_.deleteParam("/xy_tolerance");
-    nh_local_.deleteParam("/linear_max_vel");
-    nh_local_.deleteParam("/linear_acceleration");
-    nh_local_.deleteParam("/linear_kp");
-    nh_local_.deleteParam("/linear_brake_distance");
-    nh_local_.deleteParam("/linear_min_brake_distance");
-    nh_local_.deleteParam("/linear_brake_distance_ratio");
-    nh_local_.deleteParam("/theta_tolerance");
-    nh_local_.deleteParam("/angular_max_vel");
-    nh_local_.deleteParam("/angular_acceleration");
-    nh_local_.deleteParam("/angular_kp");
-    nh_local_.deleteParam("/angular_brake_distance");
-    nh_local_.deleteParam("/angular_min_brake_distance");
-    nh_local_.deleteParam("/angular_brake_distance_ratio");
+    nh_local_.deleteParam("active");
+    nh_local_.deleteParam("control_frequency");
+    nh_local_.deleteParam("lookahead_distance");
+    nh_local_.deleteParam("xy_tolerance");
+    nh_local_.deleteParam("linear_max_vel");
+    nh_local_.deleteParam("linear_acceleration");
+    nh_local_.deleteParam("linear_kp");
+    nh_local_.deleteParam("linear_min_brake_distance");
+    nh_local_.deleteParam("linear_brake_distance_ratio");
+    nh_local_.deleteParam("theta_tolerance");
+    nh_local_.deleteParam("angular_max_vel");
+    nh_local_.deleteParam("angular_acceleration");
+    nh_local_.deleteParam("angular_kp");
+    nh_local_.deleteParam("angular_brake_distance");
+    nh_local_.deleteParam("angular_min_brake_distance");
+    nh_local_.deleteParam("angular_brake_distance_ratio");
 }
 
 bool pathTracking::initializeParams(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
@@ -56,26 +54,25 @@ bool pathTracking::initializeParams(std_srvs::Empty::Request &req, std_srvs::Emp
     bool get_param_ok = true;
     bool prev_active = p_active_;
 
-    get_param_ok = nh_local_.param<bool>("/active", p_active_, true);
-    get_param_ok = nh_local_.param<double>("/control_frequency", control_frequency_, 70);
-    get_param_ok = nh_local_.param<double>("/lookahead_distance", lookahead_distance_, 0.3);
-    get_param_ok = nh_local_.param<double>("/robot_L", robot_L_, 0.3);
+    get_param_ok = nh_local_.param<bool>("active", p_active_, true);
+    get_param_ok = nh_local_.param<double>("control_frequency", control_frequency_, 70);
+    get_param_ok = nh_local_.param<double>("lookahead_distance", lookahead_distance_, 0.3);
 
-    get_param_ok = nh_local_.param<double>("/xy_tolerance", xy_tolerance_, 0.02);
-    get_param_ok = nh_local_.param<double>("/linear_max_vel", linear_max_vel_, 0.8);
-    get_param_ok = nh_local_.param<double>("/linear_acceleration", linear_acceleration_, 0.3);
-    get_param_ok = nh_local_.param<double>("/linear_kp", linear_kp_, 0.8);
-    get_param_ok = nh_local_.param<double>("/linear_brake_distance", linear_brake_distance_, 0.15);
-    get_param_ok = nh_local_.param<double>("/linear_min_brake_distance", linear_min_brake_distance_, 0.25);
-    get_param_ok = nh_local_.param<double>("/linear_brake_distance_ratio", linear_brake_distance_ratio_, 0.3);
+    get_param_ok = nh_local_.param<double>("xy_tolerance", xy_tolerance_, 0.02);
+    get_param_ok = nh_local_.param<double>("linear_max_vel", linear_max_vel_, 0.8);
+    get_param_ok = nh_local_.param<double>("linear_acceleration", linear_acceleration_, 0.3);
+    get_param_ok = nh_local_.param<double>("linear_kp", linear_kp_, 0.8);
+    get_param_ok = nh_local_.param<double>("linear_brake_vel", linear_brake_vel_, 0.25);
+    get_param_ok = nh_local_.param<double>("linear_min_brake_distance", linear_min_brake_distance_, 0.25);
+    get_param_ok = nh_local_.param<double>("linear_brake_distance_ratio", linear_brake_distance_ratio_, 0.3);
 
-    get_param_ok = nh_local_.param<double>("/theta_tolerance", theta_tolerance_, 0.03);
-    get_param_ok = nh_local_.param<double>("/angular_max_vel", angular_max_vel_, 3.0);
-    get_param_ok = nh_local_.param<double>("/angular_acceleration", angular_acceleration_, 0.15);
-    get_param_ok = nh_local_.param<double>("/angular_kp", angular_kp_, 1.5);
-    get_param_ok = nh_local_.param<double>("/angular_brake_distance", angular_brake_distance_, 0.15);
-    get_param_ok = nh_local_.param<double>("/angular_min_brake_distance", angular_min_brake_distance_, 0.15);
-    get_param_ok = nh_local_.param<double>("/angular_brake_distance_ratio", angular_brake_distance_ratio_, 0.15);
+    get_param_ok = nh_local_.param<double>("theta_tolerance", theta_tolerance_, 0.03);
+    get_param_ok = nh_local_.param<double>("angular_max_vel", angular_max_vel_, 3.0);
+    get_param_ok = nh_local_.param<double>("angular_acceleration", angular_acceleration_, 0.15);
+    get_param_ok = nh_local_.param<double>("angular_kp", angular_kp_, 1.5);
+    get_param_ok = nh_local_.param<double>("angular_brake_distance", angular_brake_distance_, 0.15);
+    get_param_ok = nh_local_.param<double>("angular_min_brake_distance", angular_min_brake_distance_, 0.15);
+    get_param_ok = nh_local_.param<double>("angular_brake_distance_ratio", angular_brake_distance_ratio_, 0.15);
 
     if (p_active_ != prev_active)
     {
@@ -128,6 +125,7 @@ void pathTracking::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
     pathRequest(cur_pose, goal_pose);
     switchMode(MODE::PATH_RECEIVED);
     xy_reached = false;
+    peak_v = 0;
 }
 
 // void pathTracking::poseCallback(const nav_msgs::Odometry::ConstPtr &msg) // base_pose_ground_truth
@@ -256,8 +254,7 @@ void pathTracking::timerCallback(const ros::TimerEvent &e)
 
 RobotPose pathTracking::rollingwindow(RobotPose cur)
 {
-    // only determine the x, y position of localgoal
-    // ROS_INFO("Rolling Window START");
+    // determine x, y position of localgoal
     RobotPose local_goal, past_local_goal;
     if (countdistance(cur_pose, goal_pose) < lookahead_distance_ + 0.2)
     {
@@ -277,12 +274,11 @@ RobotPose pathTracking::rollingwindow(RobotPose cur)
 
             if (flag - past_flag == 1)
             {
-                /*==============================================================
-                                            MODIFY
-                        if i = 0, the following code would break down?
-                 ==============================================================*/
                 local_goal = global_path.at(i);
-                past_local_goal = global_path.at(i - 1);
+                if (i == 0)
+                    past_local_goal = global_path.at(i);
+                else
+                    past_local_goal = global_path.at(i - 1);
                 localgoal_found = true;
                 break;
             }
@@ -365,13 +361,17 @@ void pathTracking::diff_controller(RobotPose localgoal, RobotPose cur)
     /*=====================================================================================
                                     determine localgoal_theta
     =====================================================================================*/
+    // calculate the slope that perpendicular to the line, localgoal to center point
     localgoal.theta = atan2(-1, (localgoal.y - center.y) / (localgoal.x - center.x));
+    // use cross product to check localgoal.theta correct or 180 deg difference
     RobotPose fake_local, fake_cur;
     fake_local.x = cos(localgoal.theta);
     fake_local.y = sin(localgoal.theta);
     fake_cur.x = cos(cur.theta);
     fake_cur.y = sin(cur.theta);
+    // (center point to cur point) cross (center point to localgoal point)
     bool inner_dir = ((localgoal.y - center.y) * (cur.x - center.x) - (localgoal.x - center.x) * (cur.y - center.y)) >= 0 ? true : false;
+    // cur.theta vector cross localgoal.theta vector
     bool outer_dir = (fake_local.y * fake_cur.x - fake_local.x * fake_cur.y) >= 0 ? true : false;
     if (!xy_reached)
     {
@@ -387,6 +387,9 @@ void pathTracking::diff_controller(RobotPose localgoal, RobotPose cur)
     /*=====================================================================================
                                 determine rotate direction
     =====================================================================================*/
+    // use cross product to determine rotate direction
+    // cur.theta vector cross localgoal.theta vector
+    // (since localgoal.theta might changed, instead of using "outer_dir" directly, we calculate it again)
     int rotate_direction = 0;
     double cross = cos(cur.theta) * sin(localgoal.theta) - sin(cur.theta) * cos(localgoal.theta);
     if (cross >= 0)
@@ -411,11 +414,13 @@ void pathTracking::diff_controller(RobotPose localgoal, RobotPose cur)
     localgoal_pub.publish(local);
 
     /*=====================================================================================
-                        calculte velocity by robot_L with speed planning
+                calculte velocity with speed planning linear.x and angular.z
     =====================================================================================*/
-    // linear x
-    double last_v = velocity.x;
     double output_v = 0;
+
+    // linear x
+    double last_v = velocity.x; // for speed planning in acceleration stage
+
     if (if_xy_reached(cur_pose, goal_pose))
     {
         xy_reached = true;
@@ -424,11 +429,13 @@ void pathTracking::diff_controller(RobotPose localgoal, RobotPose cur)
     }
     else
     {
-        output_v = speedPlanning(last_v, go_forward_or_backward);
+        output_v = speedPlanning(last_v, go_forward_or_backward, peak_v);
         velocity.x = output_v;
     }
+    peak_v = (output_v > peak_v) ? output_v : peak_v;
 
     // angular z
+    double last_w = velocity.theta;
     if (if_xy_reached(cur_pose, goal_pose))
     {
         if (if_theta_reached(cur_pose, goal_pose))
@@ -438,27 +445,30 @@ void pathTracking::diff_controller(RobotPose localgoal, RobotPose cur)
         }
         else
         {
+            // use p control for decceleration when xy has reached
             double theta_err = fabs(angleLimiting(cur_pose.theta - goal_pose.theta));
-            velocity.theta = theta_err * angular_kp_;
-            velocity.theta *= rotate_direction;
+            if (theta_err > angular_brake_distance_)
+                velocity.theta = fabs(last_w) + (angular_acceleration_ / control_frequency_);
+            else
+                velocity.theta = theta_err * angular_kp_;
         }
     }
     else
     {
-        velocity.theta = output_v / circularMotion_R;
-        // velocity.theta = fabs(velocity.x - velocity.y) / robot_L_;
+        // use w = v / r for angular z
+        velocity.theta = fabs(output_v / circularMotion_R);
         // if (velocity.theta > angular_max_vel_)
         // {
         //     velocity.theta = angular_max_vel_;
         // }
-        velocity.theta *= rotate_direction;
     }
-
+    velocity.theta *= rotate_direction;
     publishVelocity(velocity);
 }
 
-double pathTracking::speedPlanning(double last_vel, int direction)
+double pathTracking::speedPlanning(double last_vel, int direction, double peal_vel)
 {
+    // only for linear velocity
     double output_vel_;
     double xy_err = countdistance(cur_pose, goal_pose);
     if (xy_err > linear_brake_distance_)
@@ -466,16 +476,17 @@ double pathTracking::speedPlanning(double last_vel, int direction)
         // acceleration
         double d_vel = linear_acceleration_ / control_frequency_;
         output_vel_ = abs(last_vel) + d_vel;
-        if (output_vel_ > linear_max_vel_)
-        {
-            output_vel_ = linear_max_vel_;
-        }
     }
     else
     {
         // deceleration
-        output_vel_ = xy_err * linear_kp_;
+        double dcc = pow(peal_vel, 2) / 2 / linear_brake_distance_;
+        output_vel_ = sqrt(2 * dcc * xy_err);
+        if (output_vel_ < linear_brake_vel_)
+            output_vel_ = xy_err * linear_kp_;
     }
+    if (output_vel_ > linear_max_vel_)
+        output_vel_ = linear_max_vel_;
     output_vel_ *= direction;
     return output_vel_;
 }
@@ -498,7 +509,7 @@ void pathTracking::publishVelocity(RobotPose vel_)
     vel.linear.x = vel_.x;
     vel.linear.y = 0;
     vel.angular.z = vel_.theta;
-    ROS_INFO("velocity = (%f, %f, %f)", vel.linear.x, vel.linear.y, vel_.theta);
+    // ROS_INFO("velocity = (%f, %f, %f)", vel.linear.x, vel.linear.y, vel_.theta);
 
     vel_pub.publish(vel);
 }
@@ -506,16 +517,6 @@ void pathTracking::publishVelocity(RobotPose vel_)
 double pathTracking::countdistance(RobotPose pose1, RobotPose pose2)
 {
     return sqrt(pow(pose1.x - pose2.x, 2) + pow(pose1.y - pose2.y, 2));
-}
-
-int pathTracking::signDetermine(double a)
-{
-    if (a > 0)
-        return 1;
-    else if (a == 0)
-        return 0;
-    else
-        return -1;
 }
 
 bool pathTracking::if_xy_reached(RobotPose cur, RobotPose goal)

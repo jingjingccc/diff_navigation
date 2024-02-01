@@ -51,7 +51,7 @@ private:
 
     RobotPose rollingwindow(RobotPose cur);
     void diff_controller(RobotPose localgoal, RobotPose cur);
-    double speedPlanning(double last_vel, int direction);
+    double speedPlanning(double last_vel, int direction, double peal_vel);
     double angleLimiting(double theta);
 
     MODE mode;
@@ -81,20 +81,19 @@ private:
     bool if_xy_reached(RobotPose cur, RobotPose goal);
     bool if_theta_reached(RobotPose cur, RobotPose goal);
     bool xy_reached;
-    int signDetermine(double a);
+    double peak_v;
+    double linear_brake_distance_;
 
-    // param
+    // param server
     bool p_active_;
     double control_frequency_;
     double lookahead_distance_;
-    // robot
-    double robot_L_;
     // linear
     double xy_tolerance_;
     double linear_max_vel_;
     double linear_acceleration_;
     double linear_kp_;
-    double linear_brake_distance_;
+    double linear_brake_vel_;
     double linear_min_brake_distance_;
     double linear_brake_distance_ratio_;
     // angular
