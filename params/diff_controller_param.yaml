@@ -1,14 +1,15 @@
 active: true
+if_avoidance_enable: false
 control_frequency: 70
-lookahead_distance: 0.45
+lookahead_distance: 0.25
 
 # linear
 xy_tolerance: 0.02
-linear_max_vel: 1.0
-linear_acceleration: 0.5
-linear_kp: 0.9
-linear_brake_vel: 0.15
-linear_min_brake_distance: 0.2
+linear_max_vel: 1.5
+linear_acceleration: 0.4
+linear_kp: 0.75
+linear_brake_vel: 0.2
+linear_min_brake_distance: 0.3
 linear_brake_distance_ratio: 0.2
 
 # angular

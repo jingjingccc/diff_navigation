@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
   tf
+  obstacle_detector
 )
 
 ## System dependencies are found with CMake's conventions
@@ -106,7 +107,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES diff_navigation
-#  CATKIN_DEPENDS roscpp rospy std_msgs tf
+  CATKIN_DEPENDS roscpp rospy std_msgs tf obstacle_detector
 #  DEPENDS system_lib
 )
 
@@ -159,6 +160,14 @@ add_executable(diff_controller_plus src/diff_controller_plus.cpp)
 add_dependencies(diff_controller_plus ${catkin_EXPORTED_TARGETS})
 target_link_libraries(diff_controller_plus ${catkin_LIBRARIES})
 
+add_executable(regulated_pure_pursuit src/regulated_pure_pursuit.cpp)
+add_dependencies(regulated_pure_pursuit ${catkin_EXPORTED_TARGETS} )
+target_link_libraries(regulated_pure_pursuit ${catkin_LIBRARIES})
+
+add_executable(diff_controller_avoidance src/diff_controller_avoidance.cpp)
+add_dependencies(diff_controller_avoidance ${catkin_EXPORTED_TARGETS} )
+target_link_libraries(diff_controller_avoidance ${catkin_LIBRARIES})
+
 #############
 ## Install ##
 #############
@@ -201,6 +210,13 @@ target_link_libraries(diff_controller_plus ${catkin_LIBRARIES})
 #   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 # )
 
+# install(TARGETS diff_controller diff_controller_plus
+#   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+# )
+
+# install(DIRECTORY include launch params
+#   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+# )
 #############
 ## Testing ##
 #############

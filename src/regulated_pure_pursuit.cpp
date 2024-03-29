@@ -1,4 +1,4 @@
-#include "diff_controller_plus.h"
+#include "regulated_pure_pursuit.h"
 
 pathTracking::pathTracking(ros::NodeHandle &nh, ros::NodeHandle &nh_local)
 {
@@ -56,7 +56,15 @@ bool pathTracking::initializeParams(std_srvs::Empty::Request &req, std_srvs::Emp
 
     get_param_ok = nh_local_.param<bool>("active", p_active_, true);
     get_param_ok = nh_local_.param<double>("control_frequency", control_frequency_, 70);
-    get_param_ok = nh_local_.param<double>("lookahead_distance", lookahead_distance_, 0.3);
+    get_param_ok = nh_local_.param<bool>("if_allow_reversing", if_allow_reversing_, true);
+
+    get_param_ok = nh_local_.param<double>("lookahead_time", lookahead_time_, 0.3);
+    get_param_ok = nh_local_.param<double>("min_lookahead_distance", min_lookahead_distance_, 0.3);
+    get_param_ok = nh_local_.param<double>("max_lookahead_distance", max_lookahead_distance_, 0.3);
+
+    get_param_ok = nh_local_.param<double>("sharp_turn_threshold", sharp_turn_threshold_, 0.3);
+    get_param_ok = nh_local_.param<double>("curvature_min_radius", curvature_min_radius_, 0.3);
+    get_param_ok = nh_local_.param<double>("min_sharp_turn_vel", min_sharp_turn_vel_, 0.1);
 
     get_param_ok = nh_local_.param<double>("xy_tolerance", xy_tolerance_, 0.02);
     get_param_ok = nh_local_.param<double>("linear_max_vel", linear_max_vel_, 0.8);
@@ -79,7 +87,7 @@ bool pathTracking::initializeParams(std_srvs::Empty::Request &req, std_srvs::Emp
         if (p_active_)
         {
             vel_pub = nh_.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
-            localgoal_pub = nh_.advertise<geometry_msgs::PoseStamped>("/local_goal", 10);
+            lookahead_point_pub = nh_.advertise<geometry_msgs::PoseStamped>("/local_goal", 10);
             center_pub = nh_.advertise<geometry_msgs::PointStamped>("/center_point", 10);
             // pose_sub = nh_.subscribe("/base_pose_ground_truth", 10, &pathTracking::poseCallback, this);
             pose_sub = nh_.subscribe("/ekf_pose", 10, &pathTracking::poseCallback, this);
@@ -88,7 +96,7 @@ bool pathTracking::initializeParams(std_srvs::Empty::Request &req, std_srvs::Emp
         else
         {
             vel_pub.shutdown();
-            localgoal_pub.shutdown();
+            lookahead_point_pub.shutdown();
             center_pub.shutdown();
             pose_sub.shutdown();
             goal_sub.shutdown();
@@ -112,10 +120,7 @@ void pathTracking::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
     goal_pose.y = msg->pose.position.y;
     tf2::Quaternion q;
     tf2::fromMsg(msg->pose.orientation, q);
-    tf2::Matrix3x3 qt(q);
-    double _, yaw;
-    qt.getRPY(_, _, yaw);
-    goal_pose.theta = yaw;
+    tf2::Matrix3x3(q).getRPY(_, _, goal_pose.theta);
     ROS_INFO("RECEIVED GOAL - %f %f %f", goal_pose.x, goal_pose.y, goal_pose.theta);
 
     linear_brake_distance_ = countdistance(cur_pose, goal_pose) * linear_brake_distance_ratio_;
@@ -124,7 +129,6 @@ void pathTracking::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
 
     pathRequest(cur_pose, goal_pose);
     switchMode(MODE::PATH_RECEIVED);
-    xy_reached = false;
     peak_v = 0;
 }
 
@@ -140,7 +144,7 @@ void pathTracking::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
 //     cur_pose.theta = yaw;
 // }
 
-void pathTracking::poseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &msg) // base_pose_ground_truth
+void pathTracking::poseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &msg)
 {
     cur_pose.x = msg->pose.pose.position.x;
     cur_pose.y = msg->pose.pose.position.y;
@@ -154,35 +158,29 @@ void pathTracking::poseCallback(const geometry_msgs::PoseWithCovarianceStamped::
 
 void pathTracking::pathRequest(RobotPose cur_, RobotPose goal_)
 {
+    tf2::Quaternion q;
+
     geometry_msgs::PoseStamped cur;
     cur.header.frame_id = "map";
     cur.pose.position.x = cur_.x;
     cur.pose.position.y = cur_.y;
     cur.pose.position.z = 0;
-
-    tf2::Quaternion q;
     q.setRPY(0, 0, cur_.theta);
-    cur.pose.orientation.x = q.x();
-    cur.pose.orientation.y = q.y();
-    cur.pose.orientation.z = q.z();
-    cur.pose.orientation.w = q.w();
+    cur.pose.orientation = tf2::toMsg(q);
 
     geometry_msgs::PoseStamped goal;
     goal.header.frame_id = "map";
     goal.pose.position.x = goal_.x;
     goal.pose.position.y = goal_.y;
     goal.pose.position.z = 0;
-
     q.setRPY(0, 0, goal_pose.theta);
-    goal.pose.orientation.x = q.x();
-    goal.pose.orientation.y = q.y();
-    goal.pose.orientation.z = q.z();
-    goal.pose.orientation.w = q.w();
+    goal.pose.orientation = tf2::toMsg(q);
 
     ros::ServiceClient client = nh_.serviceClient<nav_msgs::GetPlan>("/move_base/make_plan");
     if (!client)
     {
         ROS_FATAL("Couid not initialize get plan service from %s", client.getService().c_str());
+        return;
     }
 
     nav_msgs::GetPlan srv;
@@ -200,12 +198,8 @@ void pathTracking::pathRequest(RobotPose cur_, RobotPose goal_)
             RobotPose pose;
             pose.x = path_msg.poses[i].pose.position.x;
             pose.y = path_msg.poses[i].pose.position.y;
-            tf2::Quaternion q;
             tf2::fromMsg(path_msg.poses[i].pose.orientation, q);
-            tf2::Matrix3x3 qt(q);
-            double _, yaw;
-            qt.getRPY(_, _, yaw);
-            pose.theta = yaw;
+            tf2::Matrix3x3(q).getRPY(_, _, pose.theta);
             global_path.push_back(pose);
         }
     }
@@ -234,11 +228,14 @@ void pathTracking::timerCallback(const ros::TimerEvent &e)
         break;
     case MODE::PATH_RECEIVED:
         ROS_INFO("PATH_RECEIVED");
+        xy_reached = false;
+        theta_reached = false;
+        peak_v = 0;
         switchMode(MODE::TRACKING);
         break;
     case MODE::TRACKING:
         ROS_INFO("TRACKING");
-        if (if_xy_reached(cur_pose, goal_pose) && if_theta_reached(cur_pose, goal_pose)) // reached
+        if (xy_reached && theta_reached) // reached
         {
             velocity.x = 0;
             velocity.y = 0;
@@ -246,72 +243,86 @@ void pathTracking::timerCallback(const ros::TimerEvent &e)
             switchMode(MODE::IDLE);
             break;
         }
-        RobotPose local_goal = rollingwindow(cur_pose); // find local goal
-        diff_controller(local_goal, cur_pose);          // track local goal with speed planning
+        diff_controller(cur_pose); // track local goal with speed planning
         break;
     }
 }
 
-RobotPose pathTracking::rollingwindow(RobotPose cur)
+RobotPose pathTracking::rollingwindow(RobotPose cur, double lookahead_dist_)
 {
-    // determine x, y position of localgoal
-    RobotPose local_goal, past_local_goal;
-    if (countdistance(cur_pose, goal_pose) < lookahead_distance_) // + 0.2
+    RobotPose min_dis_point_, lookahead_point_;
+
+    // find the closet point from robot to path
+    // make sure there are at least two point in global path list
+    // min_dis_point_ = global_path.at(1);
+    while (global_path.size() > 2)
     {
-        local_goal = goal_pose;
+        if (countdistance(cur, global_path.at(0)) >= countdistance(cur, global_path.at(1)))
+            global_path.erase(global_path.begin());
+        else
+            break;
     }
-    else
+    ROS_INFO("global_path.size() = %ld", global_path.size());
+    bool lookahead_point_found = false;
+    for (int i = 0; i < global_path.size(); i++)
     {
-        bool localgoal_found = false;
-        int flag = 1, past_flag = 1;
-        for (int i = 0; i < global_path.size(); i++)
+        if (countdistance(cur, global_path.at(i)) < lookahead_dist_)
         {
-            past_flag = flag;
-            if (countdistance(cur, global_path.at(i)) >= lookahead_distance_)
-                flag = 1; // exterior
-            else
-                flag = 0; // interior
-
-            if (flag - past_flag == 1)
-            {
-                local_goal = global_path.at(i);
-                if (i == 0)
-                    past_local_goal = global_path.at(i);
-                else
-                    past_local_goal = global_path.at(i - 1);
-                localgoal_found = true;
-                // prune the path points before localgoal
-                // global_path.erase(global_path.begin(), global_path.begin() + i);
-                break;
-            }
-        }
-
-        if (localgoal_found)
-        {
-            local_goal.x = (local_goal.x + past_local_goal.x) / 2;
-            local_goal.y = (local_goal.y + past_local_goal.y) / 2;
+            lookahead_point_ = global_path.at(i);
+            lookahead_point_found = true;
         }
         else
         {
-            double mindis = 10000, past_dis, dis = 0;
-            for (int i = 0; i < global_path.size(); i++)
-            {
-                past_dis = dis;
-                dis = countdistance(cur, global_path.at(i));
-                if (mindis > dis)
-                {
-                    local_goal = global_path.at(i);
-                    mindis = dis;
-                }
-            }
+            break;
         }
     }
 
-    return local_goal;
+    if (!lookahead_point_found)
+    {
+        ROS_INFO("Set lookahead point as the min dis pose");
+        lookahead_point_ = min_dis_point_;
+    }
+
+    if (countdistance(cur_pose, goal_pose) < lookahead_dist_)
+    {
+        ROS_INFO("Set lookahead point as goal pose");
+        lookahead_point_ = goal_pose;
+    }
+    else if (lookahead_point_found)
+        ROS_INFO("Set lookahead point on the path");
+
+    return lookahead_point_;
 }
 
-void pathTracking::diff_controller(RobotPose localgoal, RobotPose cur)
+void pathTracking::diff_controller(RobotPose cur)
 {
+    /*=====================================================================================
+                        calculte linear velocity with speed planning Vt
+    =====================================================================================*/
+    // linear x
+    if (if_xy_reached(cur_pose, goal_pose))
+    {
+        xy_reached = true;
+        velocity.x = 0;
+        velocity.y = 0;
+    }
+    else
+    {
+        velocity.x = speedPlanning(velocity.x, peak_v);
+        peak_v = (velocity.x > peak_v) ? velocity.x : peak_v;
+    }
+
+    /*=====================================================================================
+                        calculate lookahead distance and lookahead point
+    =====================================================================================*/
+    double lookahead_distance_ = velocity.x * lookahead_time_;
+    lookahead_distance_ = (lookahead_distance_ < min_lookahead_distance_) ? min_lookahead_distance_ : lookahead_distance_;
+    lookahead_distance_ = (lookahead_distance_ > max_lookahead_distance_) ? max_lookahead_distance_ : lookahead_distance_;
+
+    ROS_INFO("lookahead distance %f", lookahead_distance_);
+    RobotPose lookahead_point = rollingwindow(cur, lookahead_distance_);
+    ROS_INFO("lookahead pose = (%f, %f, %f)", lookahead_point.x, lookahead_point.y, lookahead_point.theta);
+
     /*=====================================================================================
                                 count circular motion radius R
     =====================================================================================*/
@@ -327,131 +338,81 @@ void pathTracking::diff_controller(RobotPose localgoal, RobotPose cur)
     robotLine_perpendicular.theta = robotLine_perpendicular.x * cur.x + robotLine_perpendicular.y * cur.y; // c2
 
     // calculate the circular center, and the radius R
-    center.x = (pow(cur.x, 2) + pow(cur.y, 2) - pow(localgoal.x, 2) - pow(localgoal.y, 2) + 2 * (localgoal.y - cur.y) * robotLine_perpendicular.theta / robotLine_perpendicular.y) / (2 * (cur.x - localgoal.x) - 2 * (cur.y - localgoal.y) * robotLine_perpendicular.x / robotLine_perpendicular.y);
+    center.x = (pow(cur.x, 2) + pow(cur.y, 2) - pow(lookahead_point.x, 2) - pow(lookahead_point.y, 2) + 2 * (lookahead_point.y - cur.y) * robotLine_perpendicular.theta / robotLine_perpendicular.y) / (2 * (cur.x - lookahead_point.x) - 2 * (cur.y - lookahead_point.y) * robotLine_perpendicular.x / robotLine_perpendicular.y);
     center.y = (robotLine_perpendicular.theta - robotLine_perpendicular.x * center.x) / robotLine_perpendicular.y;
     double circularMotion_R = countdistance(center, cur);
-
-    // for rviz display "center point"
-    geometry_msgs::PointStamped center_;
-    center_.header.stamp = ros::Time::now();
-    center_.header.frame_id = "map";
-    center_.point.x = center.x;
-    center_.point.y = center.y;
-    center_.point.z = 0;
-    center_pub.publish(center_);
-
-    /*=====================================================================================
-                        determine robot go_forward_or_backward (Vx + or -)
-    =====================================================================================*/
-    int go_forward_or_backward = 0;
-    // extend the robot cur_pose length=1 with cur angle
-    RobotPose fake_cur_point;
-    fake_cur_point.x = cur.x + cos(cur.theta);
-    fake_cur_point.y = cur.y + sin(cur.theta);
-
-    // bring local_goal and cur_pose to the line (robotLine_perpendicular). If bigger than 0, on the right side of the line
-    double local_ = robotLine_perpendicular.x * localgoal.x + robotLine_perpendicular.y * localgoal.y - robotLine_perpendicular.theta;
-    double fake_cur_ = robotLine_perpendicular.x * fake_cur_point.x + robotLine_perpendicular.y * fake_cur_point.y - robotLine_perpendicular.theta;
-
-    // if local_goal and cur_pose are on the same side, then go forward
-    if ((local_ >= 0 && fake_cur_ >= 0) || (local_ <= 0 && fake_cur_ <= 0))
-        go_forward_or_backward = 1;
-    else
-        go_forward_or_backward = -1;
-    ROS_INFO("go_forward_or_backward  =  %d", go_forward_or_backward);
 
     /*=====================================================================================
                                     determine localgoal_theta
     =====================================================================================*/
     // calculate the slope that perpendicular to the line, localgoal to center point
-    localgoal.theta = atan2(-1, (localgoal.y - center.y) / (localgoal.x - center.x));
+    lookahead_point.theta = atan2(-1, (lookahead_point.y - center.y) / (lookahead_point.x - center.x));
     // use cross product to check localgoal.theta correct or 180 deg difference
     RobotPose fake_local, fake_cur;
-    fake_local.x = cos(localgoal.theta);
-    fake_local.y = sin(localgoal.theta);
+    fake_local.x = cos(lookahead_point.theta);
+    fake_local.y = sin(lookahead_point.theta);
     fake_cur.x = cos(cur.theta);
     fake_cur.y = sin(cur.theta);
     // (center point to cur point) cross (center point to localgoal point)
-    bool inner_dir = ((localgoal.y - center.y) * (cur.x - center.x) - (localgoal.x - center.x) * (cur.y - center.y)) >= 0 ? true : false;
+    bool inner_dir = ((lookahead_point.y - center.y) * (cur.x - center.x) - (lookahead_point.x - center.x) * (cur.y - center.y)) >= 0 ? true : false;
     // cur.theta vector cross localgoal.theta vector
     bool outer_dir = (fake_local.y * fake_cur.x - fake_local.x * fake_cur.y) >= 0 ? true : false;
     if (!xy_reached)
     {
         if (inner_dir != outer_dir)
-            localgoal.theta = angleLimiting(localgoal.theta + M_PI);
+            lookahead_point.theta = angleLimiting(lookahead_point.theta + M_PI);
     }
     else
     {
         // if xy has reached, just turn around to meet the goal angle
-        localgoal.theta = goal_pose.theta;
+        lookahead_point.theta = goal_pose.theta;
     }
-    ROS_INFO("localgoal = (%f %f %f)", localgoal.x, localgoal.y, localgoal.theta);
-
-    /*=====================================================================================
-                                determine rotate direction
-    =====================================================================================*/
-    // use cross product to determine rotate direction
-    // cur.theta vector cross localgoal.theta vector
-    // (since localgoal.theta might changed, instead of using "outer_dir" directly, we calculate it again)
-    int rotate_direction = 0;
-    double cross = cos(cur.theta) * sin(localgoal.theta) - sin(cur.theta) * cos(localgoal.theta);
-    if (cross >= 0)
-        rotate_direction = 1;
-    else
-        rotate_direction = -1;
-    ROS_INFO("rotate_direction  =  %d", rotate_direction);
+    // ROS_INFO("localgoal = (%f %f %f)", lookahead_point.x, lookahead_point.y, lookahead_point.theta);
 
     // for rviz display "local_goal"
     geometry_msgs::PoseStamped local;
     local.header.stamp = ros::Time::now();
     local.header.frame_id = "map";
-    local.pose.position.x = localgoal.x;
-    local.pose.position.y = localgoal.y;
+    local.pose.position.x = lookahead_point.x;
+    local.pose.position.y = lookahead_point.y;
     local.pose.position.z = 0;
     tf2::Quaternion q;
-    q.setRPY(0, 0, localgoal.theta);
+    q.setRPY(0, 0, lookahead_point.theta);
     local.pose.orientation.x = q.x();
     local.pose.orientation.y = q.y();
     local.pose.orientation.z = q.z();
     local.pose.orientation.w = q.w();
-    localgoal_pub.publish(local);
+    lookahead_point_pub.publish(local);
 
     /*=====================================================================================
-                calculte velocity with speed planning linear.x and angular.z
+                            Apply Curvature Heuristic to linear velocity
+       =====================================================================================*/
+    bool apply_curvature_heuristic = false;
+    if (!xy_reached && fabs(angleLimiting(lookahead_point.theta - cur.theta)) > sharp_turn_threshold_)
+    {
+        apply_curvature_heuristic = true;
+        ROS_INFO("Apply Curvature Heuristic");
+        velocity.x *= (curvature_min_radius_ * circularMotion_R);
+        velocity.x = (velocity.x > 0 && velocity.x < min_sharp_turn_vel_) ? min_sharp_turn_vel_ : velocity.x;
+        // velocity.x = (velocity.x < 0 && velocity.x > -min_sharp_turn_vel_) ? -min_sharp_turn_vel_ : velocity.x;
+    }
+
+    /*=====================================================================================
+            calculte velocity with speed planning linear.x and angular.z
     =====================================================================================*/
-    double output_v = 0;
-
-    // linear x
-    double last_v = velocity.x; // for speed planning in acceleration stage
-
-    if (if_xy_reached(cur_pose, goal_pose))
-    {
-        xy_reached = true;
-        velocity.x = 0;
-        velocity.y = 0;
-    }
-    else
-    {
-        output_v = speedPlanning(last_v, go_forward_or_backward, peak_v);
-        velocity.x = output_v;
-    }
-    peak_v = (output_v > peak_v) ? output_v : peak_v;
-
-    // angular z
-    double last_w = velocity.theta;
-    if (if_xy_reached(cur_pose, goal_pose))
+    if (xy_reached)
     {
         if (if_theta_reached(cur_pose, goal_pose))
         {
             velocity.theta = 0;
-            switchMode(MODE::IDLE);
+            theta_reached = true;
         }
         else
         {
             // use p control for decceleration when xy has reached
             double theta_err = fabs(angleLimiting(cur_pose.theta - goal_pose.theta));
             if (theta_err > angular_brake_distance_)
-                velocity.theta = fabs(last_w) + (angular_acceleration_ / control_frequency_);
+                velocity.theta = fabs(velocity.theta) + (angular_acceleration_ / control_frequency_);
             else
                 velocity.theta = theta_err * angular_kp_;
         }
@@ -459,18 +420,57 @@ void pathTracking::diff_controller(RobotPose localgoal, RobotPose cur)
     else
     {
         // use w = v / r for angular z
-        velocity.theta = fabs(output_v / circularMotion_R);
+        velocity.theta = fabs(velocity.x / circularMotion_R);
+        if (apply_curvature_heuristic)
+            velocity.theta *= 3.0;
         if (velocity.theta > angular_max_vel_)
-        {
             velocity.theta = angular_max_vel_;
-        }
     }
+
+    /*=====================================================================================
+                        determine robot go_forward_or_backward (Vx + or -)
+    =====================================================================================*/
+    int go_forward_or_backward = 1;
+    if (if_allow_reversing_)
+    {
+        // extend the robot cur_pose length=1 with cur angle
+        RobotPose fake_cur_point;
+        fake_cur_point.x = cur.x + cos(cur.theta);
+        fake_cur_point.y = cur.y + sin(cur.theta);
+
+        // bring local_goal and cur_pose to the line (robotLine_perpendicular). If bigger than 0, on the right side of the line
+        double local_ = robotLine_perpendicular.x * lookahead_point.x + robotLine_perpendicular.y * lookahead_point.y - robotLine_perpendicular.theta;
+        double fake_cur_ = robotLine_perpendicular.x * fake_cur_point.x + robotLine_perpendicular.y * fake_cur_point.y - robotLine_perpendicular.theta;
+
+        // if local_goal and cur_pose are on the same side, then go forward
+        if ((local_ >= 0 && fake_cur_ >= 0) || (local_ <= 0 && fake_cur_ <= 0))
+            go_forward_or_backward = 1;
+        else
+            go_forward_or_backward = -1;
+    }
+    // ROS_INFO("go_forward_or_backward  =  %d", go_forward_or_backward);
+
+    /*=====================================================================================
+                                     determine rotate direction
+         =====================================================================================*/
+    // use cross product to determine rotate direction
+    // cur.theta vector cross localgoal.theta vector
+    // (since localgoal.theta might changed, instead of using "outer_dir" directly, we calculate it again)
+    int rotate_direction = 0;
+    double cross = cos(cur.theta) * sin(lookahead_point.theta) - sin(cur.theta) * cos(lookahead_point.theta);
+    if (cross >= 0)
+        rotate_direction = 1;
+    else
+        rotate_direction = -1;
+    // ROS_INFO("rotate_direction  =  %d", rotate_direction);
+
+    velocity.x *= go_forward_or_backward;
     velocity.theta *= rotate_direction;
     ROS_INFO("R = %f => velocity = (%f, %f, %f)", circularMotion_R, velocity.x, velocity.y, velocity.theta);
     publishVelocity(velocity);
 }
 
-double pathTracking::speedPlanning(double last_vel, int direction, double peak_vel)
+double pathTracking::speedPlanning(double last_vel, double peak_vel)
 {
     // only for linear velocity
     double output_vel_;
@@ -491,7 +491,6 @@ double pathTracking::speedPlanning(double last_vel, int direction, double peak_v
     }
     if (output_vel_ > linear_max_vel_)
         output_vel_ = linear_max_vel_;
-    output_vel_ *= direction;
     return output_vel_;
 }
 
@@ -513,7 +512,7 @@ void pathTracking::publishVelocity(RobotPose vel_)
     vel.linear.x = vel_.x;
     vel.linear.y = 0;
     vel.angular.z = vel_.theta;
-
+    // ROS_INFO("[publish] vel = (%f, 0, %f)", vel_.x, vel_.theta);
     vel_pub.publish(vel);
 }
 

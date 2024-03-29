@@ -29,19 +29,26 @@
         <rosparam file="$(find diff_navigation)/params/costmap_common_params.yaml" command="load" ns="local_costmap" />
         <rosparam file="$(find diff_navigation)/params/local_costmap_param.yaml" command="load" />
         <rosparam file="$(find diff_navigation)/params/global_costmap_param.yaml" command="load" />
-        <!-- <remap from="map" to="map_" /> -->
     </node>
 
-    <!-- differential -->
-    <!-- <node pkg="diff_navigation" type="diff_controller" name="diff_controller" output="screen">
-        <rosparam file="$(find diff_navigation)/params/param.yaml" command="load" />
+    <!-- differential-controller -->
+    <!-- <node pkg="diff_navigation" type="diff_controller" name="diff_controller" output="screen"> -->
+    <!-- <node pkg="diff_navigation" type="diff_controller_plus" name="diff_controller_plus" output="screen">
+        <rosparam file="$(find diff_navigation)/params/diff_controller_param.yaml" command="load" />
     </node> -->
-    <node pkg="diff_navigation" type="diff_controller_plus" name="diff_controller_plus" output="screen">
-        <rosparam file="$(find diff_navigation)/params/param.yaml" command="load" />
+
+    <node pkg="diff_navigation" type="regulated_pure_pursuit" name="regulated_pure_pursuit" output="screen">
+        <param name="if_allow_reversing" value="true" />
+        <rosparam file="$(find diff_navigation)/params/regulated_pure_pursuit.yaml" command="load" />
     </node>
+
+    <!-- <node pkg="diff_navigation" type="diff_controller_avoidance" name="diff_controller_avoidance" output="screen">
+        <param name="if_avoidance_enable" value="true" />
+        <param name="if_allow_reversing" value="true" />
+        <rosparam file="$(find diff_navigation)/params/diff_controller_avoidance_param.yaml" command="load" />
+    </node> -->
 
     <include file="$(find obstacle_detector)/launch/nodes.launch"/>
-
     <node name="ekf_localization" pkg="ekf_localization" type="ekf_holonomic.py" />
 
 </launch>
