@@ -93,7 +93,7 @@ private:
     double max_lookahead_distance_;
     // curvature heuristic
     double sharp_turn_threshold_;
-    double curvature_min_radius_;
+    double min_circularmotion_radius_;
     double min_sharp_turn_vel_;
     // velocity profile linear
     double xy_tolerance_;
@@ -107,6 +107,7 @@ private:
     double theta_tolerance_;
     double angular_max_vel_;
     double angular_acceleration_;
+    double angular_delta_heuristic_;
     double angular_kp_;
     double angular_brake_distance_;
     double angular_min_brake_distance_;

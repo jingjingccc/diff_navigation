@@ -6,7 +6,7 @@ pathTracking::pathTracking(ros::NodeHandle &nh, ros::NodeHandle &nh_local)
     nh_local_ = nh_local;
     std_srvs::Empty e;
     p_active_ = false;
-    params_srv_ = nh_local_.advertiseService("/params", &pathTracking::initializeParams, this);
+    params_srv_ = nh_local_.advertiseService("params", &pathTracking::initializeParams, this);
     initializeParams(e.request, e.response);
     initialize();
 }
@@ -63,7 +63,7 @@ bool pathTracking::initializeParams(std_srvs::Empty::Request &req, std_srvs::Emp
     get_param_ok = nh_local_.param<double>("max_lookahead_distance", max_lookahead_distance_, 0.3);
 
     get_param_ok = nh_local_.param<double>("sharp_turn_threshold", sharp_turn_threshold_, 0.3);
-    get_param_ok = nh_local_.param<double>("curvature_min_radius", curvature_min_radius_, 0.3);
+    get_param_ok = nh_local_.param<double>("min_circularmotion_radius", min_circularmotion_radius_, 0.3);
     get_param_ok = nh_local_.param<double>("min_sharp_turn_vel", min_sharp_turn_vel_, 0.1);
 
     get_param_ok = nh_local_.param<double>("xy_tolerance", xy_tolerance_, 0.02);
@@ -77,6 +77,7 @@ bool pathTracking::initializeParams(std_srvs::Empty::Request &req, std_srvs::Emp
     get_param_ok = nh_local_.param<double>("theta_tolerance", theta_tolerance_, 0.03);
     get_param_ok = nh_local_.param<double>("angular_max_vel", angular_max_vel_, 3.0);
     get_param_ok = nh_local_.param<double>("angular_acceleration", angular_acceleration_, 0.15);
+    get_param_ok = nh_local_.param<double>("angular_delta_heuristic", angular_delta_heuristic_, 0.5);
     get_param_ok = nh_local_.param<double>("angular_kp", angular_kp_, 1.5);
     get_param_ok = nh_local_.param<double>("angular_brake_distance", angular_brake_distance_, 0.15);
     get_param_ok = nh_local_.param<double>("angular_min_brake_distance", angular_min_brake_distance_, 0.15);
@@ -220,21 +221,21 @@ void pathTracking::timerCallback(const ros::TimerEvent &e)
     switch (mode)
     {
     case MODE::IDLE:
-        ROS_INFO("IDLE");
+        ROS_INFO_STREAM_THROTTLE(5, "IDLE");
         velocity.x = 0;
         velocity.y = 0;
         velocity.theta = 0;
         publishVelocity(velocity);
         break;
     case MODE::PATH_RECEIVED:
-        ROS_INFO("PATH_RECEIVED");
+        ROS_INFO_STREAM_THROTTLE(5, "PATH_RECEIVED");
         xy_reached = false;
         theta_reached = false;
         peak_v = 0;
         switchMode(MODE::TRACKING);
         break;
     case MODE::TRACKING:
-        ROS_INFO("TRACKING");
+        ROS_INFO_STREAM_THROTTLE(5, "TRACKING");
         if (xy_reached && theta_reached) // reached
         {
             velocity.x = 0;
@@ -391,10 +392,10 @@ void pathTracking::diff_controller(RobotPose cur)
     if (!xy_reached && fabs(angleLimiting(lookahead_point.theta - cur.theta)) > sharp_turn_threshold_)
     {
         apply_curvature_heuristic = true;
-        ROS_INFO("Apply Curvature Heuristic");
-        velocity.x *= (curvature_min_radius_ * circularMotion_R);
-        velocity.x = (velocity.x > 0 && velocity.x < min_sharp_turn_vel_) ? min_sharp_turn_vel_ : velocity.x;
-        // velocity.x = (velocity.x < 0 && velocity.x > -min_sharp_turn_vel_) ? -min_sharp_turn_vel_ : velocity.x;
+        double original = velocity.x;
+        double slow_linear_vel = velocity.x * (circularMotion_R / min_circularmotion_radius_);
+        velocity.x = (slow_linear_vel < min_sharp_turn_vel_) ? min_sharp_turn_vel_ : slow_linear_vel;
+        // ROS_INFO("Apply Curvature Heuristic: %f --> %f --> %f", original, slow_linear_vel, velocity.x);
     }
 
     /*=====================================================================================
@@ -420,9 +421,11 @@ void pathTracking::diff_controller(RobotPose cur)
     else
     {
         // use w = v / r for angular z
-        velocity.theta = fabs(velocity.x / circularMotion_R);
         if (apply_curvature_heuristic)
-            velocity.theta *= 3.0;
+            velocity.theta = fabs(velocity.theta) + angular_delta_heuristic_;
+        else
+            velocity.theta = fabs(velocity.x / circularMotion_R);
+
         if (velocity.theta > angular_max_vel_)
             velocity.theta = angular_max_vel_;
     }
@@ -466,7 +469,7 @@ void pathTracking::diff_controller(RobotPose cur)
 
     velocity.x *= go_forward_or_backward;
     velocity.theta *= rotate_direction;
-    ROS_INFO("R = %f => velocity = (%f, %f, %f)", circularMotion_R, velocity.x, velocity.y, velocity.theta);
+    // ROS_INFO("R = %f => velocity = (%f, %f, %f)", circularMotion_R, velocity.x, velocity.y, velocity.theta);
     publishVelocity(velocity);
 }
 
