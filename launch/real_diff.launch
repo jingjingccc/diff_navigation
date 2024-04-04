@@ -1,34 +1,14 @@
 <launch>
-    <param name="use_sim_time" value="true"/>
-    <arg name="init_x_" default="0.5" />
-    <arg name="init_y_" default="0.5" /> 
-    <arg name="init_yaw_" default="0.0" /> 
-
-    <!-- stage -->
-    <node pkg="stage_ros" type="stageros" name="stageros" args="$(find stage_simulation)/stage/eurobot_beacon.world" output="screen">
-        <remap from="base_scan" to="scan"/>
-    </node>
-
-    <!-- map tf -->
-    <node name="map_odom" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 0 0 0 1 map odom"/>
-    <node name="odom_base_footprint" pkg="tf2_ros" type="static_transform_publisher" args="0.5 0.5 0 0 0 0 1 odom base_footprint"/>
 
     <!-- map_file -->
-    <!-- <arg name="map_file" default="$(find stage_simulation)/maps/eurobot_map/empty_map.yaml"/> -->
-    <!-- <arg name="map_file" default="$(find stage_simulation)/maps/cgh_map/PME_3F_v1.yaml"/> -->
-    <arg name="map_file" default="$(find stage_simulation)/maps/cgh_map/PME_3F_v2.yaml"/>
+    <!-- <arg name="map_file" default="$(find cartographer)/maps/eurobot_map/empty_map.yaml"/> -->
     
     <!-- map server -->
-    <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)">
-        <remap from="map" to="carto_map" />
-    </node>
-
-    <!-- rviz -->
-    <node type="rviz" name="rviz" pkg="rviz" args="-d $(find stage_simulation)/rviz/ideal.rviz" />
-
+    <!-- <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)" /> -->
+    
     <!-- gloabol planner -->
     <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
-        <remap from="map" to="carto_map" />
+        <remap from="/map" to="/carto_map" />
         <param name="base_global_planner" value="global_planner/GlobalPlanner"/>
         <rosparam file="$(find diff_navigation)/params/costmap_common_params.yaml" command="load" ns="global_costmap" />
         <rosparam file="$(find diff_navigation)/params/costmap_common_params.yaml" command="load" ns="local_costmap" />
@@ -44,7 +24,9 @@
 
     <node pkg="diff_navigation" type="regulated_pure_pursuit" name="regulated_pure_pursuit" output="screen">
         <param name="if_allow_reversing" value="true" />
-        <rosparam file="$(find diff_navigation)/params/regulated_pure_pursuit.yaml" command="load" />
+        <remap from="/ekf_pose" to ="/tracked_pose" />
+        <rosparam file="$(find diff_navigation)/params/regulated_pure_pursuit_test.yaml" command="load" />
+        <!-- <rosparam file="$(find diff_navigation)/params/regulated_pure_pursuit.yaml" command="load" /> -->
     </node>
 
     <!-- <node pkg="diff_navigation" type="diff_controller_avoidance" name="diff_controller_avoidance" output="screen">
@@ -53,7 +35,5 @@
         <rosparam file="$(find diff_navigation)/params/diff_controller_avoidance_param.yaml" command="load" />
     </node> -->
 
-    <include file="$(find obstacle_detector)/launch/nodes.launch"/>
-    <node name="ekf_localization" pkg="ekf_localization" type="ekf_holonomic.py" />
 
 </launch>

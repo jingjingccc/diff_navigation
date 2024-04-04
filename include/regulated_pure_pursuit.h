@@ -52,7 +52,8 @@ private:
     // subscriber
     ros::Subscriber pose_sub;
     // void poseCallback(const nav_msgs::Odometry::ConstPtr &msg); //base_pose_ground_truth
-    void poseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &pose_msg); // ekf_pose
+    // void poseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &pose_msg); // ekf_pose
+    void poseCallback(const geometry_msgs::PoseStamped::ConstPtr &pose_msg); // tracked_pose
     ros::Subscriber goal_sub;
     void goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg);
 
@@ -107,7 +108,7 @@ private:
     double theta_tolerance_;
     double angular_max_vel_;
     double angular_acceleration_;
-    double angular_delta_heuristic_;
+    double angular_acceleration_heuristic_;
     double angular_kp_;
     double angular_brake_distance_;
     double angular_min_brake_distance_;
