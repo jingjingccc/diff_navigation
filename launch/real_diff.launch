@@ -24,7 +24,7 @@
 
     <node pkg="diff_navigation" type="regulated_pure_pursuit" name="regulated_pure_pursuit" output="screen">
         <param name="if_allow_reversing" value="true" />
-        <remap from="/ekf_pose" to ="/tracked_pose" />
+        <remap from="/ekf_pose" to ="/carto_pose" />
         <rosparam file="$(find diff_navigation)/params/regulated_pure_pursuit_test.yaml" command="load" />
         <!-- <rosparam file="$(find diff_navigation)/params/regulated_pure_pursuit.yaml" command="load" /> -->
     </node>

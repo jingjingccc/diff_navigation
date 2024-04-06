@@ -33,16 +33,28 @@ pathTracking::~pathTracking()
 {
     nh_local_.deleteParam("active");
     nh_local_.deleteParam("control_frequency");
-    nh_local_.deleteParam("lookahead_distance");
+    nh_local_.deleteParam("if_allow_reversing");
+
+    nh_local_.deleteParam("lookahead_time");
+    nh_local_.deleteParam("min_lookahead_distance");
+    nh_local_.deleteParam("max_lookahead_distance");
+
+    nh_local_.deleteParam("sharp_turn_threshold");
+    nh_local_.deleteParam("min_circularmotion_radius");
+    nh_local_.deleteParam("min_sharp_turn_vel");
+
     nh_local_.deleteParam("xy_tolerance");
     nh_local_.deleteParam("linear_max_vel");
     nh_local_.deleteParam("linear_acceleration");
     nh_local_.deleteParam("linear_kp");
+    nh_local_.deleteParam("linear_brake_vel");
     nh_local_.deleteParam("linear_min_brake_distance");
     nh_local_.deleteParam("linear_brake_distance_ratio");
+
     nh_local_.deleteParam("theta_tolerance");
     nh_local_.deleteParam("angular_max_vel");
     nh_local_.deleteParam("angular_acceleration");
+    nh_local_.deleteParam("angular_acceleration_heuristic");
     nh_local_.deleteParam("angular_kp");
     nh_local_.deleteParam("angular_brake_distance");
     nh_local_.deleteParam("angular_min_brake_distance");
@@ -64,7 +76,7 @@ bool pathTracking::initializeParams(std_srvs::Empty::Request &req, std_srvs::Emp
 
     get_param_ok = nh_local_.param<double>("sharp_turn_threshold", sharp_turn_threshold_, 0.3);
     get_param_ok = nh_local_.param<double>("min_circularmotion_radius", min_circularmotion_radius_, 0.3);
-    get_param_ok = nh_local_.param<double>("min_sharp_turn_vel", min_sharp_turn_vel_, 0.1);
+    get_param_ok = nh_local_.param<double>("max_sharp_turn_vel", max_sharp_turn_vel_, 0.1);
 
     get_param_ok = nh_local_.param<double>("xy_tolerance", xy_tolerance_, 0.02);
     get_param_ok = nh_local_.param<double>("linear_max_vel", linear_max_vel_, 0.8);
@@ -323,7 +335,7 @@ void pathTracking::diff_controller(RobotPose cur)
                         calculte linear velocity with speed planning Vt
     =====================================================================================*/
     // linear x
-    if (if_xy_reached(cur_pose, goal_pose))
+    if (xy_reached || if_xy_reached(cur_pose, goal_pose))
     {
         xy_reached = true;
         velocity.x = 0;
@@ -341,10 +353,7 @@ void pathTracking::diff_controller(RobotPose cur)
     double lookahead_distance_ = velocity.x * lookahead_time_;
     lookahead_distance_ = (lookahead_distance_ < min_lookahead_distance_) ? min_lookahead_distance_ : lookahead_distance_;
     lookahead_distance_ = (lookahead_distance_ > max_lookahead_distance_) ? max_lookahead_distance_ : lookahead_distance_;
-
-    ROS_INFO("lookahead distance %f", lookahead_distance_);
     RobotPose lookahead_point = rollingwindow(cur, lookahead_distance_);
-    ROS_INFO("lookahead pose = (%f, %f, %f)", lookahead_point.x, lookahead_point.y, lookahead_point.theta);
 
     /*=====================================================================================
                                 count circular motion radius R
@@ -354,19 +363,16 @@ void pathTracking::diff_controller(RobotPose cur)
     robotLine.x = tan(cur.theta);                                // a1
     robotLine.y = -1;                                            // b1
     robotLine.theta = robotLine.x * cur.x + robotLine.y * cur.y; // c1
-    // ROS_INFO("robotLine: %f %f %f", robotLine.x, robotLine.y, robotLine.theta);
 
     // a2x + b2y = c2 // perpendicular to robotLine, and go through the center point
     robotLine_perpendicular.x = -1 * robotLine.y;                                                          // a2
     robotLine_perpendicular.y = robotLine.x;                                                               // b2
     robotLine_perpendicular.theta = robotLine_perpendicular.x * cur.x + robotLine_perpendicular.y * cur.y; // c2
-    // ROS_INFO("robotLine_perpendicular: %f %f %f", robotLine_perpendicular.x, robotLine_perpendicular.y, robotLine_perpendicular.theta);
 
     // calculate the circular center, and the radius R
     center.x = (pow(cur.x, 2) + pow(cur.y, 2) - pow(lookahead_point.x, 2) - pow(lookahead_point.y, 2) + 2 * (lookahead_point.y - cur.y) * robotLine_perpendicular.theta / robotLine_perpendicular.y) / (2 * (cur.x - lookahead_point.x) - 2 * (cur.y - lookahead_point.y) * robotLine_perpendicular.x / robotLine_perpendicular.y);
     center.y = (robotLine_perpendicular.theta - robotLine_perpendicular.x * center.x) / robotLine_perpendicular.y;
     double circularMotion_R = countdistance(center, cur);
-    // ROS_INFO("%f %f %f", center.x, center.y, center.theta);
 
     /*=====================================================================================
                                     determine localgoal_theta
@@ -393,7 +399,6 @@ void pathTracking::diff_controller(RobotPose cur)
         // if xy has reached, just turn around to meet the goal angle
         lookahead_point.theta = goal_pose.theta;
     }
-    ROS_INFO("lookahead_pose = (%f %f %f)", lookahead_point.x, lookahead_point.y, lookahead_point.theta);
 
     // for rviz display "local_goal"
     geometry_msgs::PoseStamped local;
@@ -414,12 +419,16 @@ void pathTracking::diff_controller(RobotPose cur)
                             Apply Curvature Heuristic to linear velocity
        =====================================================================================*/
     bool apply_curvature_heuristic = false;
-    if (!xy_reached && fabs(angleLimiting(lookahead_point.theta - cur.theta)) > sharp_turn_threshold_)
+    if (!xy_reached && (lookahead_point.x != goal_pose.x && lookahead_point.y != goal_pose.y) && fabs(angleLimiting(lookahead_point.theta - cur.theta)) > sharp_turn_threshold_)
     {
         apply_curvature_heuristic = true;
         double original = velocity.x;
         double slow_linear_vel = velocity.x * (circularMotion_R / min_circularmotion_radius_);
-        velocity.x = (slow_linear_vel < min_sharp_turn_vel_) ? min_sharp_turn_vel_ : slow_linear_vel;
+        velocity.x = (slow_linear_vel < max_sharp_turn_vel_) ? max_sharp_turn_vel_ : slow_linear_vel;
+        if (velocity.x > linear_max_vel_)
+            velocity.x = linear_max_vel_;
+        if (velocity.x < -linear_max_vel_)
+            velocity.x = -linear_max_vel_;
         ROS_INFO("Apply Curvature Heuristic: %f --> %f --> %f", original, slow_linear_vel, velocity.x);
     }
 
@@ -446,19 +455,15 @@ void pathTracking::diff_controller(RobotPose cur)
     else
     {
         // use w = v / r for angular z
-        // ROS_INFO("1-- velocity.theta = %f,%f", velocity.theta, circularMotion_R);
         if (apply_curvature_heuristic)
         {
             velocity.theta = fabs(velocity.theta) + (angular_acceleration_heuristic_ / control_frequency_);
-            // ROS_INFO("2-- velocity.theta = %f,%f", velocity.theta, circularMotion_R);
         }
 
         velocity.theta = fabs(velocity.x / circularMotion_R);
-        // ROS_INFO("3-- velocity.theta = %f", velocity.theta);
 
         if (velocity.theta > angular_max_vel_)
             velocity.theta = angular_max_vel_;
-        // ROS_INFO("4-- velocity.theta /= %f", velocity.theta);
     }
 
     /*=====================================================================================
@@ -501,10 +506,7 @@ void pathTracking::diff_controller(RobotPose cur)
     velocity.x *= go_forward_or_backward;
     velocity.theta *= rotate_direction;
     ROS_INFO("R = %f => velocity = (%f, %f, %f)", circularMotion_R, velocity.x, velocity.y, velocity.theta);
-    if (velocity.x > 0.5)
-        velocity.x = 0.5;
-    if (velocity.x < -0.5)
-        velocity.x = -0.5;
+
     publishVelocity(velocity);
 }
 

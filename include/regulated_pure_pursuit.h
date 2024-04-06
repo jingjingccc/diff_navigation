@@ -53,7 +53,7 @@ private:
     ros::Subscriber pose_sub;
     // void poseCallback(const nav_msgs::Odometry::ConstPtr &msg); //base_pose_ground_truth
     // void poseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &pose_msg); // ekf_pose
-    void poseCallback(const geometry_msgs::PoseStamped::ConstPtr &pose_msg); // tracked_pose
+    void poseCallback(const geometry_msgs::PoseStamped::ConstPtr &pose_msg); // tracked_pose // carto_pose
     ros::Subscriber goal_sub;
     void goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg);
 
@@ -95,7 +95,7 @@ private:
     // curvature heuristic
     double sharp_turn_threshold_;
     double min_circularmotion_radius_;
-    double min_sharp_turn_vel_;
+    double max_sharp_turn_vel_;
     // velocity profile linear
     double xy_tolerance_;
     double linear_max_vel_;

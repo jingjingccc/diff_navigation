@@ -7,16 +7,15 @@ max_lookahead_distance: 1.2
 
 sharp_turn_threshold: 0.52
 min_circularmotion_radius: 0.4
-# min_sharp_turn_vel: 0.1
-min_sharp_turn_vel: 0.1
+max_sharp_turn_vel: 0.1
 
 # linear
 xy_tolerance: 0.02
-linear_max_vel: 0.5
-linear_acceleration: 0.2
+linear_max_vel: 0.65
+linear_acceleration: 0.23
 linear_kp: 0.9
-linear_brake_vel: 0.2
-linear_min_brake_distance: 0.3
+linear_brake_vel: 0.25
+linear_min_brake_distance: 0.35
 linear_brake_distance_ratio: 0.35
 
 # angular
