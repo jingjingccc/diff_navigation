@@ -1,9 +1,24 @@
+# Independent settings for the global planner's costmap
+
+# Ref 
+# https://answers.ros.org/question/369769/update_frequency-vs-publish_frequency-costmap-parameters/
+# https://github.com/ros-planning/navigation_tutorials/blob/indigo-devel/navigation_stage/move_base_config/global_costmap_params.yaml
+
 global_costmap:
+  # Set the global and robot frame for the costmap
   global_frame: map
   robot_base_frame: base_footprint
 
-  update_frequency: 5.0
-  publish_frequency: 5.0
-  transform_tolerance: 1.0
-
+  # Set update(costmap) and publish(costmap) frequency of the costmap
+  # "update_frequency" means how fast the costmap should be updated, e.g.: how often the sensor data is integrated
+  # "publish_frequency" means how fast the costmap should be published, like move_base, it only for visualization purpose
+  update_frequency: 5.0 # unit: hz (default: 5.0)
+  publish_frequency: 5.0 # unit: hz (default: 0.0)
+  transform_tolerance: 1.0 # unit: s (default: 0.2)
+  
+  # The parameter "rolling_window" set true means that the costmap will only update the local surroundings (around robot).
+  # While "rolling window" set be true, "static_map" must set be false. 
   static_map: true
+  rolling_window: false
+
+#  footprint_padding: 0.01

@@ -1,5 +1,6 @@
 active: true
 control_frequency: 50
+robot_pose_tolerance: 0.2
 
 lookahead_time: 1.2
 min_lookahead_distance: 0.25

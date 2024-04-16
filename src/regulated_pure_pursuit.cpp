@@ -20,8 +20,10 @@ void pathTracking::initialize()
     // flag
     mode = MODE::IDLE;
     past_mode = MODE::IDLE;
+    last_cur_time = ros::Time::now();
+    robot_pose_available = false;
 
-    while (!ros::service::waitForService("/move_base/make_plan", ros::Duration(3.0)))
+    while (!ros::service::waitForService("/move_base/GlobalPlanner/make_plan", ros::Duration(3.0))) /// move_base/GlobalPlanner/make_plan
     {
         ROS_INFO("Waiting for service /move_base/make_plan to become available");
     }
@@ -57,8 +59,6 @@ pathTracking::~pathTracking()
     nh_local_.deleteParam("angular_acceleration_heuristic");
     nh_local_.deleteParam("angular_kp");
     nh_local_.deleteParam("angular_brake_distance");
-    nh_local_.deleteParam("angular_min_brake_distance");
-    nh_local_.deleteParam("angular_brake_distance_ratio");
 }
 
 bool pathTracking::initializeParams(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
@@ -68,6 +68,7 @@ bool pathTracking::initializeParams(std_srvs::Empty::Request &req, std_srvs::Emp
 
     get_param_ok = nh_local_.param<bool>("active", p_active_, true);
     get_param_ok = nh_local_.param<double>("control_frequency", control_frequency_, 70);
+    get_param_ok = nh_local_.param<double>("robot_pose_tolerance", robot_pose_tolerance_, 70);
     get_param_ok = nh_local_.param<bool>("if_allow_reversing", if_allow_reversing_, true);
 
     get_param_ok = nh_local_.param<double>("lookahead_time", lookahead_time_, 0.3);
@@ -92,8 +93,6 @@ bool pathTracking::initializeParams(std_srvs::Empty::Request &req, std_srvs::Emp
     get_param_ok = nh_local_.param<double>("angular_acceleration_heuristic", angular_acceleration_heuristic_, 0.5);
     get_param_ok = nh_local_.param<double>("angular_kp", angular_kp_, 1.5);
     get_param_ok = nh_local_.param<double>("angular_brake_distance", angular_brake_distance_, 0.15);
-    get_param_ok = nh_local_.param<double>("angular_min_brake_distance", angular_min_brake_distance_, 0.15);
-    get_param_ok = nh_local_.param<double>("angular_brake_distance_ratio", angular_brake_distance_ratio_, 0.15);
 
     if (p_active_ != prev_active)
     {
@@ -180,6 +179,14 @@ void pathTracking::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
 
 void pathTracking::poseCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
 {
+    if (ros::Time::now().toSec() - last_cur_time.toSec() > robot_pose_tolerance_)
+    {
+        ROS_ERROR("[RPP: Receive Robot Pose Late...]");
+        robot_pose_available = false;
+    }
+    else
+        robot_pose_available = true;
+
     cur_pose.x = msg->pose.position.x;
     cur_pose.y = msg->pose.position.y;
     tf2::Quaternion q;
@@ -188,6 +195,8 @@ void pathTracking::poseCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
     double _, yaw;
     qt.getRPY(_, _, yaw);
     cur_pose.theta = yaw;
+
+    last_cur_time = ros::Time::now();
 }
 
 void pathTracking::pathRequest(RobotPose cur_, RobotPose goal_)
@@ -210,7 +219,7 @@ void pathTracking::pathRequest(RobotPose cur_, RobotPose goal_)
     q.setRPY(0, 0, goal_pose.theta);
     goal.pose.orientation = tf2::toMsg(q);
 
-    ros::ServiceClient client = nh_.serviceClient<nav_msgs::GetPlan>("/move_base/make_plan");
+    ros::ServiceClient client = nh_.serviceClient<nav_msgs::GetPlan>("/move_base/GlobalPlanner/make_plan"); /// move_base/GlobalPlanner/make_plan
     if (!client)
     {
         ROS_FATAL("Couid not initialize get plan service from %s", client.getService().c_str());
@@ -255,10 +264,7 @@ void pathTracking::timerCallback(const ros::TimerEvent &e)
     {
     case MODE::IDLE:
         ROS_INFO_STREAM_THROTTLE(5, "[RPP]: IDLE");
-        velocity.x = 0;
-        velocity.y = 0;
-        velocity.theta = 0;
-        publishVelocity(velocity);
+        stationaryChassis();
         break;
     case MODE::PATH_RECEIVED:
         ROS_INFO_STREAM_THROTTLE(5, "[RPP]: PATH_RECEIVED");
@@ -269,17 +275,21 @@ void pathTracking::timerCallback(const ros::TimerEvent &e)
         break;
     case MODE::TRACKING:
         ROS_INFO_STREAM_THROTTLE(5, "[RPP]: TRACKING");
+        if (!robot_pose_available)
+        {
+            stationaryChassis();
+            break;
+        }
         if (xy_reached && theta_reached) // reached
         {
-            velocity.x = 0;
-            velocity.y = 0;
-            velocity.theta = 0;
+            stationaryChassis();
             switchMode(MODE::IDLE);
             break;
         }
         diff_controller(cur_pose); // track local goal with speed planning
         break;
     }
+    publishVelocity(velocity);
 }
 
 RobotPose pathTracking::rollingwindow(RobotPose cur, double lookahead_dist_)
@@ -506,8 +516,6 @@ void pathTracking::diff_controller(RobotPose cur)
     velocity.x *= go_forward_or_backward;
     velocity.theta *= rotate_direction;
     ROS_INFO("R = %f => velocity = (%f, %f, %f)", circularMotion_R, velocity.x, velocity.y, velocity.theta);
-
-    publishVelocity(velocity);
 }
 
 double pathTracking::speedPlanning(double last_vel, double peak_vel)
@@ -532,6 +540,13 @@ double pathTracking::speedPlanning(double last_vel, double peak_vel)
     if (output_vel_ > linear_max_vel_)
         output_vel_ = linear_max_vel_;
     return output_vel_;
+}
+
+void pathTracking::stationaryChassis()
+{
+    velocity.x = 0;
+    velocity.y = 0;
+    velocity.theta = 0;
 }
 
 double pathTracking::angleLimiting(double theta)

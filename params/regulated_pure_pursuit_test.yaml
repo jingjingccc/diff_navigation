@@ -5,9 +5,9 @@ lookahead_time: 1.2
 min_lookahead_distance: 0.25
 max_lookahead_distance: 1.2
 
-sharp_turn_threshold: 0.52
+sharp_turn_threshold: 0.785 # 45 deg
 min_circularmotion_radius: 0.4
-max_sharp_turn_vel: 0.1
+max_sharp_turn_vel: 0.15
 
 # linear
 xy_tolerance: 0.02
@@ -23,7 +23,5 @@ theta_tolerance: 0.03
 angular_max_vel: 1.0
 angular_acceleration: 0.3
 angular_acceleration_heuristic: 0.3
-angular_kp: 0.8
-angular_brake_distance: 0.15
-angular_min_brake_distance: 0.15
-angular_brake_distance_ratio: 0.15
+angular_kp: 0.75
+angular_brake_distance: 0.2

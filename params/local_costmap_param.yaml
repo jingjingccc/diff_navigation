@@ -1,4 +1,9 @@
+# Independent settings for the local planner's costmap.
+# Ref
+# https://github.com/ros-planning/navigation_tutorials/blob/indigo-devel/navigation_stage/move_base_config/local_costmap_params.yaml
+
 local_costmap:
+  # Set the global and robot frame for the local costmap
   global_frame: odom
   robot_base_frame: base_footprint
 
@@ -6,5 +11,8 @@ local_costmap:
   publish_frequency: 5.0
   transform_tolerance: 1.0
 
+  # The following setting means that the costmap will only surrounding the robot
   static_map: false
   rolling_window: true
+
+  

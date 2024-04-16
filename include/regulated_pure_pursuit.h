@@ -78,15 +78,21 @@ private:
     bool if_xy_reached(RobotPose cur, RobotPose goal);
     bool if_theta_reached(RobotPose cur, RobotPose goal);
     double speedPlanning(double last_vel, double peak_vel);
+    void stationaryChassis();
 
     // tools
     double angleLimiting(double theta);
     double countdistance(RobotPose pose1, RobotPose pose2);
 
+    // transform tolerance
+    ros::Time last_cur_time;
+    bool robot_pose_available;
+
     double _;
     // param server
     bool p_active_;
     double control_frequency_;
+    double robot_pose_tolerance_;
     bool if_allow_reversing_;
     // lookahead
     double lookahead_time_;
@@ -111,6 +117,4 @@ private:
     double angular_acceleration_heuristic_;
     double angular_kp_;
     double angular_brake_distance_;
-    double angular_min_brake_distance_;
-    double angular_brake_distance_ratio_;
 };
