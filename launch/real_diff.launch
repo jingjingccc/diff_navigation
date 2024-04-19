@@ -8,7 +8,7 @@
         <remap from="/map" to ="/carto_map" />
     </node>
 
-    <node name="odom_base_footprint" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 0 0 0 1 base_footprint base_link"/>
+    <!-- <node name="odom_base_footprint" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 0 0 0 1 base_footprint base_link"/> -->
     
     <!-- gloabol planner -->
     <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">

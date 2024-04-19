@@ -4,19 +4,18 @@ pathTracking::pathTracking(ros::NodeHandle &nh, ros::NodeHandle &nh_local)
 {
     nh_ = nh;
     nh_local_ = nh_local;
+    node_name = ros::this_node::getName();
+
     std_srvs::Empty e;
     p_active_ = false;
     params_srv_ = nh_local_.advertiseService("params", &pathTracking::initializeParams, this);
     initializeParams(e.request, e.response);
+
     initialize();
 }
 
 void pathTracking::initialize()
 {
-    timer_ = nh_.createTimer(ros::Duration(1 / control_frequency_), &pathTracking::timerCallback, this, false, false);
-    timer_.setPeriod(ros::Duration(1.0 / control_frequency_), false);
-    timer_.start();
-
     // flag
     mode = MODE::IDLE;
     past_mode = MODE::IDLE;
@@ -25,10 +24,11 @@ void pathTracking::initialize()
 
     while (!ros::service::waitForService("/move_base/GlobalPlanner/make_plan", ros::Duration(3.0))) /// move_base/GlobalPlanner/make_plan
     {
-        ROS_INFO("Waiting for service /move_base/make_plan to become available");
+        ROS_INFO_STREAM("[" << node_name << "]: Waiting for service /move_base/GlobalPlanner/make_plan to become available");
     }
 
-    ROS_INFO("Initialized!");
+    ROS_INFO_STREAM("[" << node_name << "]: Initialized OK!");
+    timer_.start();
 }
 
 pathTracking::~pathTracking()
@@ -104,6 +104,9 @@ bool pathTracking::initializeParams(std_srvs::Empty::Request &req, std_srvs::Emp
             // pose_sub = nh_.subscribe("/base_pose_ground_truth", 10, &pathTracking::poseCallback, this);
             pose_sub = nh_.subscribe("/ekf_pose", 10, &pathTracking::poseCallback, this);
             goal_sub = nh_.subscribe("/nav_goal", 10, &pathTracking::goalCallback, this);
+
+            timer_ = nh_.createTimer(ros::Duration(1 / control_frequency_), &pathTracking::timerCallback, this, false, false);
+            timer_.setPeriod(ros::Duration(1.0 / control_frequency_), false);
         }
         else
         {
@@ -117,11 +120,11 @@ bool pathTracking::initializeParams(std_srvs::Empty::Request &req, std_srvs::Emp
 
     if (get_param_ok)
     {
-        ROS_INFO("set param ok");
+        ROS_INFO_STREAM("[" << node_name << "]: Set param OK!");
     }
     else
     {
-        ROS_WARN_STREAM("set param failed");
+        ROS_WARN_STREAM("[" << node_name << "]: Set param OK!");
     }
     return true;
 }
@@ -133,8 +136,7 @@ void pathTracking::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
     tf2::Quaternion q;
     tf2::fromMsg(msg->pose.orientation, q);
     tf2::Matrix3x3(q).getRPY(_, _, goal_pose.theta);
-    ROS_INFO("[RPP]: RECEIVED GOAL - %f %f %f", goal_pose.x, goal_pose.y, goal_pose.theta);
-    ROS_INFO("[RPP]: cur pose - %f %f %f", cur_pose.x, cur_pose.y, cur_pose.theta);
+    ROS_INFO("[%s]: Received goal = (%f, %f, %f)", node_name.c_str(), goal_pose.x, goal_pose.y, goal_pose.theta);
 
     linear_brake_distance_ = countdistance(cur_pose, goal_pose) * linear_brake_distance_ratio_;
     if (linear_brake_distance_ < linear_min_brake_distance_)
@@ -145,7 +147,7 @@ void pathTracking::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
     if (global_path.size() <= 0)
     {
         switchMode(MODE::IDLE);
-        ROS_WARN("[RPP]: Failed to make plan!");
+        ROS_ERROR_STREAM("[" << node_name << "]: Failed to make plan!");
     }
     else
     {
@@ -165,7 +167,7 @@ void pathTracking::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
 //     cur_pose.theta = yaw;
 // }
 
-// void pathTracking::poseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &msg)
+// void pathTracking::poseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &msg) // nav_goal
 // {
 //     cur_pose.x = msg->pose.pose.position.x;
 //     cur_pose.y = msg->pose.pose.position.y;
@@ -177,11 +179,11 @@ void pathTracking::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
 //     cur_pose.theta = yaw;
 // }
 
-void pathTracking::poseCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
+void pathTracking::poseCallback(const geometry_msgs::PoseStamped::ConstPtr &msg) // carto_pose
 {
     if (ros::Time::now().toSec() - last_cur_time.toSec() > robot_pose_tolerance_)
     {
-        ROS_ERROR("[RPP: Receive Robot Pose Late...]");
+        ROS_WARN_STREAM("[" << node_name << "]: Received robot pose late...");
         robot_pose_available = false;
     }
     else
@@ -222,7 +224,7 @@ void pathTracking::pathRequest(RobotPose cur_, RobotPose goal_)
     ros::ServiceClient client = nh_.serviceClient<nav_msgs::GetPlan>("/move_base/GlobalPlanner/make_plan"); /// move_base/GlobalPlanner/make_plan
     if (!client)
     {
-        ROS_FATAL("Couid not initialize get plan service from %s", client.getService().c_str());
+        ROS_WARN("[%s]: Couid not initialize get plan service from %s", node_name.c_str(), client.getService().c_str());
         return;
     }
 
@@ -248,7 +250,7 @@ void pathTracking::pathRequest(RobotPose cur_, RobotPose goal_)
     }
     else
     {
-        ROS_ERROR("Failed to call service make_plan");
+        ROS_ERROR_STREAM("[" << node_name << "]: Failed to call service make_plan");
     }
 }
 
@@ -263,18 +265,18 @@ void pathTracking::timerCallback(const ros::TimerEvent &e)
     switch (mode)
     {
     case MODE::IDLE:
-        ROS_INFO_STREAM_THROTTLE(5, "[RPP]: IDLE");
+        ROS_INFO_STREAM_THROTTLE(5, "[" << node_name << "]: Mode: IDLE");
         stationaryChassis();
         break;
     case MODE::PATH_RECEIVED:
-        ROS_INFO_STREAM_THROTTLE(5, "[RPP]: PATH_RECEIVED");
+        ROS_INFO_STREAM_THROTTLE(5, "[" << node_name << "]: Mode: PATH_RECEIVED");
         xy_reached = false;
         theta_reached = false;
         peak_v = 0;
         switchMode(MODE::TRACKING);
         break;
     case MODE::TRACKING:
-        ROS_INFO_STREAM_THROTTLE(5, "[RPP]: TRACKING");
+        ROS_INFO_STREAM_THROTTLE(5, "[" << node_name << "]: Mode: TRACKING");
         if (!robot_pose_available)
         {
             stationaryChassis();
@@ -306,7 +308,6 @@ RobotPose pathTracking::rollingwindow(RobotPose cur, double lookahead_dist_)
         else
             break;
     }
-    ROS_INFO("global_path.size() = %ld", global_path.size());
     bool lookahead_point_found = false;
     for (int i = 0; i < global_path.size(); i++)
     {
@@ -322,25 +323,16 @@ RobotPose pathTracking::rollingwindow(RobotPose cur, double lookahead_dist_)
     }
 
     if (!lookahead_point_found)
-    {
-        ROS_INFO("Set lookahead point as the min dis pose");
         lookahead_point_ = min_dis_point_;
-    }
 
     if (countdistance(cur_pose, goal_pose) < lookahead_dist_)
-    {
-        ROS_INFO("Set lookahead point as goal pose");
         lookahead_point_ = goal_pose;
-    }
-    else if (lookahead_point_found)
-        ROS_INFO("Set lookahead point on the path");
 
     return lookahead_point_;
 }
 
 void pathTracking::diff_controller(RobotPose cur)
 {
-    ROS_INFO("cur_pose= %f %f %f", cur.x, cur.y, cur.theta);
     /*=====================================================================================
                         calculte linear velocity with speed planning Vt
     =====================================================================================*/
@@ -439,7 +431,7 @@ void pathTracking::diff_controller(RobotPose cur)
             velocity.x = linear_max_vel_;
         if (velocity.x < -linear_max_vel_)
             velocity.x = -linear_max_vel_;
-        ROS_INFO("Apply Curvature Heuristic: %f --> %f --> %f", original, slow_linear_vel, velocity.x);
+        // ROS_INFO("Apply Curvature Heuristic: %f --> %f --> %f", original, slow_linear_vel, velocity.x);
     }
 
     /*=====================================================================================
@@ -515,7 +507,7 @@ void pathTracking::diff_controller(RobotPose cur)
 
     velocity.x *= go_forward_or_backward;
     velocity.theta *= rotate_direction;
-    ROS_INFO("R = %f => velocity = (%f, %f, %f)", circularMotion_R, velocity.x, velocity.y, velocity.theta);
+    ROS_INFO("[%s]: Output velocity = (%f, %f, %f)", node_name.c_str(), velocity.x, velocity.y, velocity.theta);
 }
 
 double pathTracking::speedPlanning(double last_vel, double peak_vel)
@@ -567,7 +559,6 @@ void pathTracking::publishVelocity(RobotPose vel_)
     vel.linear.x = vel_.x;
     vel.linear.y = 0;
     vel.angular.z = vel_.theta;
-    // ROS_INFO("[publish] vel = (%f, 0, %f)", vel_.x, vel_.theta);
     vel_pub.publish(vel);
 }
 

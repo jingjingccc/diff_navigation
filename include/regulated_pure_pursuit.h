@@ -43,6 +43,7 @@ private:
     ros::NodeHandle nh_;
     ros::NodeHandle nh_local_;
     ros::ServiceServer params_srv_;
+    std::string node_name;
 
     // publisher
     ros::Publisher vel_pub;             // for chassis control

@@ -1,0 +1,34 @@
+active: true
+control_frequency: 50
+
+lookahead_time: 1.2
+min_lookahead_distance: 0.25
+max_lookahead_distance: 1.2
+
+sharp_turn_threshold: 0.785 # 45 deg
+min_circularmotion_radius: 0.4
+max_sharp_turn_vel: 0.15
+
+# linear
+xy_tolerance: 0.02
+linear_max_vel: 0.65
+linear_acceleration: 0.23
+linear_kp: 0.9
+linear_brake_vel: 0.25
+linear_min_brake_distance: 0.35
+linear_brake_distance_ratio: 0.35
+
+# angular
+theta_tolerance: 0.03
+angular_max_vel: 1.0
+angular_acceleration: 0.3
+angular_acceleration_heuristic: 0.3
+angular_kp: 0.75
+angular_brake_distance: 0.2
+
+# obstacle avoidance
+slow_down_distance: 3.0
+emergency_stop_distance: 1.5
+deadzone_timeout: 5.0
+heuristic_a: 0.5
+
