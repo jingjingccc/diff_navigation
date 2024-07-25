@@ -22,3 +22,6 @@ global_costmap:
   rolling_window: false
 
 #  footprint_padding: 0.01
+
+local_costmap:
+  transform_tolerance: 1.0

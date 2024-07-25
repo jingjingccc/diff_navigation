@@ -8,6 +8,7 @@
 // message
 #include "nav_msgs/Odometry.h"
 #include "nav_msgs/GetPlan.h"
+#include "geometry_msgs/PointStamped.h"
 #include "geometry_msgs/Twist.h"
 #include "geometry_msgs/PoseStamped.h"
 #include "geometry_msgs/PoseWithCovarianceStamped.h"
@@ -22,7 +23,8 @@ enum class MODE
     IDLE,
     PATH_RECEIVED,
     TRACKING,
-    EMERGENCY
+    EMERGENCY,
+    // TRANSITION
 };
 
 class RobotPose
@@ -37,6 +39,7 @@ std::string node_name;
 // tools
 double angleLimiting(double theta);
 double countdistance(RobotPose pose1, RobotPose pose2);
+bool chechVelNaN(double vel, std::string s);
 
 class obstacleAvoidance
 {
@@ -53,12 +56,16 @@ private:
 
     ros::Subscriber obs_sub;
     void obstacleCallback(const sensor_msgs::LaserScan::ConstPtr &obs_msg);
+    // void obstacleCallback(const obstacle_detector::Obstacles::ConstPtr &obs_msg);
 
     sensor_msgs::LaserScan all_obstacles;
+    // obstacle_detector::Obstacles all_obstacles;
     double obstaclesFilter(RobotPose cur, bool if_reversing, double turning_threshold);
     RobotPose obstacleHeuristic(RobotPose cur_vel, double lethal_distance_);
 
     ros::Time start_deadzone_time;
+    ros::Time start_slowdown_time;
+    bool obstacle_detected;
 
     // param
     // define avoidance behaviour
@@ -67,6 +74,9 @@ private:
     double deadzone_timeout_;
     // proximity heuristic
     double heuristic_a_; // determine how aggresive the heuristic function be, 0.0< a <= 1.0
+    double min_slowdown_vel_;
+    double min_slowdown_duration_;
+    double obstacle_resolution_;
 };
 
 class pathTracking
@@ -92,8 +102,8 @@ private:
     // subscriber
     ros::Subscriber pose_sub;
     // void poseCallback(const nav_msgs::Odometry::ConstPtr &msg); //base_pose_ground_truth
-    // void poseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &pose_msg); // ekf_pose
-    void poseCallback(const geometry_msgs::PoseStamped::ConstPtr &pose_msg); // tracked_pose // carto_pose
+    void poseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &pose_msg); // ekf_pose
+    // void poseCallback(const geometry_msgs::PoseStamped::ConstPtr &pose_msg); // tracked_pose // carto_pose
     ros::Subscriber goal_sub;
     void goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg);
 
@@ -138,7 +148,7 @@ private:
     // curvature heuristic
     double sharp_turn_threshold_;
     double min_circularmotion_radius_;
-    double max_sharp_turn_vel_;
+    double min_sharp_turn_vel_;
     // velocity profile linear
     double xy_tolerance_;
     double linear_max_vel_;

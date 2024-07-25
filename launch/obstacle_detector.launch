@@ -1,0 +1,48 @@
+<launch>
+
+    <!-- <node name="scans_merger" pkg="obstacle_detector" type="scans_merger_node" output="screen">
+        <remap from="front_scan" to="/unilidar/scan" />
+        <remap from="scan" to="scan_merger_scan" />
+        <param name="active"            value="true"/>
+        <param name="publish_scan"      value="true"/>
+        <param name="publish_pcl"       value="false"/>
+
+        <param name="ranges_num"        value="720"/>
+
+        <param name="min_scanner_range" value="0.35"/>
+        <param name="max_scanner_range" value="10.0"/>
+
+        <param name="min_x_range"       value="-10.0"/>
+        <param name="max_x_range"       value="10.0"/>
+        <param name="min_y_range"       value="-10.0"/>
+        <param name="max_y_range"       value="10.0"/>
+
+        <param name="fixed_frame_id"   value="unilidar_lidar"/>
+        <param name="target_frame_id"   value="base_footprint"/>
+    </node> -->
+
+    <node name="obstacle_extractor" pkg="obstacle_detector" type="obstacle_extractor_node">
+        <remap from="scan" to="/unilidar/scan" />
+        <param name="active"               value="true"/>
+        <param name="use_scan"             value="true"/>
+        <param name="use_pcl"              value="false"/>
+
+        <param name="use_split_and_merge"    value="true"/>
+        <param name="circles_from_visibles"  value="false"/>
+        <param name="discard_converted_segments" value="false"/>
+        <param name="transform_coordinates"  value="true"/>
+
+        <param name="min_group_points"     value="5"/>
+
+        <param name="max_group_distance"   value="0.2"/>
+        <param name="distance_proportion"  value="0.00628"/>
+        <param name="max_split_distance"   value="0.2"/>
+        <param name="max_merge_separation" value="0.5"/>
+        <param name="max_merge_spread"     value="0.35"/>
+        <param name="max_circle_radius"    value="0.6"/>
+        <param name="radius_enlargement"   value="0.25"/>
+
+        <param name="frame_id"             value="map"/>
+    </node>
+
+</launch>

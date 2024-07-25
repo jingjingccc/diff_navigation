@@ -102,7 +102,8 @@ bool pathTracking::initializeParams(std_srvs::Empty::Request &req, std_srvs::Emp
             lookahead_point_pub = nh_.advertise<geometry_msgs::PoseStamped>("/local_goal", 10);
             center_pub = nh_.advertise<geometry_msgs::PointStamped>("/center_point", 10);
             // pose_sub = nh_.subscribe("/base_pose_ground_truth", 10, &pathTracking::poseCallback, this);
-            pose_sub = nh_.subscribe("/ekf_pose", 10, &pathTracking::poseCallback, this);
+            // pose_sub = nh_.subscribe("/ekf_pose", 10, &pathTracking::poseCallback, this);
+            pose_sub = nh_.subscribe("/carto_pose", 10, &pathTracking::poseCallback, this);
             goal_sub = nh_.subscribe("/nav_goal", 10, &pathTracking::goalCallback, this);
 
             timer_ = nh_.createTimer(ros::Duration(1 / control_frequency_), &pathTracking::timerCallback, this, false, false);

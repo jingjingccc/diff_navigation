@@ -11,17 +11,17 @@ max_sharp_turn_vel: 0.15
 
 # linear
 xy_tolerance: 0.02
-linear_max_vel: 0.65
-linear_acceleration: 0.23
-linear_kp: 0.9
+linear_max_vel: 0.6
+linear_acceleration: 0.1
+linear_kp: 0.8
 linear_brake_vel: 0.25
 linear_min_brake_distance: 0.35
 linear_brake_distance_ratio: 0.35
 
 # angular
-theta_tolerance: 0.03
+theta_tolerance: 0.052 # 3 deg
 angular_max_vel: 1.0
-angular_acceleration: 0.3
+angular_acceleration: 0.25
 angular_acceleration_heuristic: 0.3
-angular_kp: 0.75
+angular_kp: 0.7
 angular_brake_distance: 0.2
