@@ -213,13 +213,13 @@ target_link_libraries(show_trajectory ${catkin_LIBRARIES})
 #   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 # )
 
-# install(TARGETS diff_controller diff_controller_plus
-#   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-# )
+ install(TARGETS diff_controller diff_controller_plus regulated_pure_pursuit diff_controller_avoidance show_trajectory
+   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+ )
 
-# install(DIRECTORY include launch params
-#   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-# )
+ install(DIRECTORY include launch params maps
+   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+ )
 #############
 ## Testing ##
 #############
