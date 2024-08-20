@@ -1,0 +1,7 @@
+# image: /home/jing/Desktop/0724_newnew.png
+image: /home/jing/Summer2022_ws/src/diff_navigation/maps/0724_new8.png
+resolution: 0.05
+origin: [-78.7, -35.2, 0.0]
+negate: 0
+occupied_thresh: 0.5
+free_thresh: 0.2

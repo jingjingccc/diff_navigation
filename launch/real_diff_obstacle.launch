@@ -3,7 +3,7 @@
     <!-- map_file -->
     <!-- <arg name="map_file" default="/home/jing/cartobot_ws/src/cartographer_ros/cartographer_ros/maps/PME_3F.yaml"/> -->
     <!-- <arg name="map_file" default="/home/jing/Desktop/0724.yaml"/> -->
-    <arg name="map_file" default="$(find stage_simulation)/maps/cgh_map/0724_new.yaml"/>
+    <arg name="map_file" default="$(find diff_navigation)/maps/0724_newnew.yaml"/>
 
     
     <!-- map server -->

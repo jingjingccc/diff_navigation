@@ -7,17 +7,24 @@
     <!-- stage -->
     <node pkg="stage_ros" type="stageros" name="stageros" args="$(find stage_simulation)/stage/eurobot_beacon.world" output="screen">
         <remap from="base_scan" to="scan"/>
+        <!-- add for two robot in stage -->
+        <remap from="/robot_0/odom" to="/odom"/>
+        <remap from="/robot_0/base_pose_ground_truth" to="/base_pose_ground_truth"/>
+        <remap from="/robot_0/base_scan" to="/scan"/>
+        <remap from="/robot_0/cmd_vel" to="/cmd_vel"/>
+        <remap from="/robot_1/cmd_vel" to="/obs/cmd_vel"/>
     </node>
 
     <!-- map tf -->
-    <node name="map_odom" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 0 0 0 1 map odom"/>
-    <node name="odom_base_footprint" pkg="tf2_ros" type="static_transform_publisher" args="0.5 0.5 0 0 0 0 1 odom base_footprint"/>
+    <!-- <node name="map_odom" pkg="tf2_ros" type="static_transform_publisher" args="0 0 0 0 0 0 1 map odom"/> -->
+    <!-- <node name="odom_base_footprint" pkg="tf2_ros" type="static_transform_publisher" args="0.5 0.5 0 0 0 0 1 odom base_footprint"/> -->
 
     <!-- map_file -->
-    <arg name="map_file" default="$(find stage_simulation)/maps/eurobot_map/empty_map.yaml"/>
+    <!-- <arg name="map_file" default="$(find stage_simulation)/maps/eurobot_map/empty_map.yaml"/> -->
     <!-- <arg name="map_file" default="$(find stage_simulation)/maps/cgh_map/0724_new.yaml"/> -->
     <!-- <arg name="map_file" default="$(find stage_simulation)/maps/cgh_map/PME_3F_v1.yaml"/> -->
     <!-- <arg name="map_file" default="$(find stage_simulation)/maps/cgh_map/PME_3F_v2.yaml"/> -->
+    <arg name="map_file" default="$(find diff_navigation)/maps/0724_newnew.yaml"/>
     
     <!-- map server -->
     <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)">
@@ -37,11 +44,17 @@
         <rosparam file="$(find diff_navigation)/params/global_costmap_param.yaml" command="load" />
     </node>
 
+    <!-- <node pkg="diff_navigation" type="diff_controller_plus" name="diff_controller_plus" output="screen">
+        <rosparam file="$(find diff_navigation)/params/diff_controller_param.yaml" command="load" />
+    </node> -->
     <node pkg="diff_navigation" type="diff_controller_avoidance" name="diff_controller_avoidance" output="screen">
-        <param name="if_avoidance_enable" value="false" />
-        <param name="if_allow_reversing" value="true" />
+        <param name="if_avoidance_enable" value="true" />
+        <param name="if_allow_reversing" value="false" />
+        <remap from="/unilidar/scan" to="scan" /> 
         <rosparam file="$(find diff_navigation)/params/diff_controller_avoidance_param.yaml" command="load" />
     </node>
+
+    <node pkg="diff_navigation" type="show_trajectory" name="show_trajectory" output="screen" />
 
     <include file="$(find obstacle_detector)/launch/nodes.launch"/>
     <node name="ekf_localization" pkg="ekf_localization" type="ekf_holonomic.py" />

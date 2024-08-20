@@ -168,6 +168,9 @@ add_executable(diff_controller_avoidance src/diff_controller_avoidance.cpp)
 add_dependencies(diff_controller_avoidance ${catkin_EXPORTED_TARGETS} )
 target_link_libraries(diff_controller_avoidance ${catkin_LIBRARIES})
 
+add_executable(show_trajectory src/show_trajectory.cpp)
+target_link_libraries(show_trajectory ${catkin_LIBRARIES})
+
 #############
 ## Install ##
 #############

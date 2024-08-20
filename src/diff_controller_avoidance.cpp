@@ -111,11 +111,11 @@ bool pathTracking::initializeParams(std_srvs::Empty::Request &req, std_srvs::Emp
         {
             vel_pub = nh_.advertise<geometry_msgs::Twist>("/cmd_vel", 10);
             lookahead_point_pub = nh_.advertise<geometry_msgs::PoseStamped>("/local_goal", 10);
-            center_pub = nh_.advertise<geometry_msgs::PointStamped>("/center_point", 10);
             // pose_sub = nh_.subscribe("/base_pose_ground_truth", 10, &pathTracking::poseCallback, this);
-            pose_sub = nh_.subscribe("/ekf_pose", 10, &pathTracking::poseCallback, this);
-            // pose_sub = nh_.subscribe("/carto_pose", 10, &pathTracking::poseCallback, this);
+            // pose_sub = nh_.subscribe("/ekf_pose", 10, &pathTracking::poseCallback, this);
+            pose_sub = nh_.subscribe("/carto_pose", 10, &pathTracking::poseCallback, this);
             goal_sub = nh_.subscribe("/nav_goal", 10, &pathTracking::goalCallback, this);
+            reach_pub = nh_.advertise<std_msgs::Bool>("/mission_finish", 10);
 
             timer_ = nh_.createTimer(ros::Duration(1 / control_frequency_), &pathTracking::timerCallback, this, false, false);
             timer_.setPeriod(ros::Duration(1.0 / control_frequency_), false);
@@ -124,7 +124,6 @@ bool pathTracking::initializeParams(std_srvs::Empty::Request &req, std_srvs::Emp
         {
             vel_pub.shutdown();
             lookahead_point_pub.shutdown();
-            center_pub.shutdown();
             pose_sub.shutdown();
             goal_sub.shutdown();
         }
@@ -180,40 +179,40 @@ void pathTracking::goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg)
 //     cur_pose.theta = yaw;
 // }
 
-void pathTracking::poseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &msg) // nav_goal
-{
-    robot_pose_available = true;
-    cur_pose.x = msg->pose.pose.position.x;
-    cur_pose.y = msg->pose.pose.position.y;
-    tf2::Quaternion q;
-    tf2::fromMsg(msg->pose.pose.orientation, q);
-    tf2::Matrix3x3 qt(q);
-    double _, yaw;
-    qt.getRPY(_, _, yaw);
-    cur_pose.theta = yaw;
-}
-
-// void pathTracking::poseCallback(const geometry_msgs::PoseStamped::ConstPtr &msg) // carto_pose
+// void pathTracking::poseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &msg) // nav_goal
 // {
-//     if (ros::Time::now().toSec() - last_cur_time.toSec() > robot_pose_tolerance_)
-//     {
-//         ROS_WARN_STREAM("[" << node_name << "]: Received robot pose late...");
-//         robot_pose_available = false;
-//     }
-//     else
-//         robot_pose_available = true;
-
-//     cur_pose.x = msg->pose.position.x;
-//     cur_pose.y = msg->pose.position.y;
+//     robot_pose_available = true;
+//     cur_pose.x = msg->pose.pose.position.x;
+//     cur_pose.y = msg->pose.pose.position.y;
 //     tf2::Quaternion q;
-//     tf2::fromMsg(msg->pose.orientation, q);
+//     tf2::fromMsg(msg->pose.pose.orientation, q);
 //     tf2::Matrix3x3 qt(q);
 //     double _, yaw;
 //     qt.getRPY(_, _, yaw);
 //     cur_pose.theta = yaw;
-
-//     last_cur_time = ros::Time::now();
 // }
+
+void pathTracking::poseCallback(const geometry_msgs::PoseStamped::ConstPtr &msg) // carto_pose
+{
+    if (ros::Time::now().toSec() - last_cur_time.toSec() > robot_pose_tolerance_)
+    {
+        ROS_WARN_STREAM("[" << node_name << "]: Received robot pose late...");
+        robot_pose_available = false;
+    }
+    else
+        robot_pose_available = true;
+
+    cur_pose.x = msg->pose.position.x;
+    cur_pose.y = msg->pose.position.y;
+    tf2::Quaternion q;
+    tf2::fromMsg(msg->pose.orientation, q);
+    tf2::Matrix3x3 qt(q);
+    double _, yaw;
+    qt.getRPY(_, _, yaw);
+    cur_pose.theta = yaw;
+
+    last_cur_time = ros::Time::now();
+}
 
 void pathTracking::pathRequest(RobotPose cur_, RobotPose goal_)
 {
@@ -277,6 +276,7 @@ void pathTracking::switchMode(MODE next)
 
 void pathTracking::timerCallback(const ros::TimerEvent &e)
 {
+    bool if_apply_reversing;
     switch (mode)
     {
     case MODE::IDLE:
@@ -303,13 +303,16 @@ void pathTracking::timerCallback(const ros::TimerEvent &e)
         {
             stationaryChassis();
             switchMode(MODE::IDLE);
+            std_msgs::Bool mission_finish_flag;
+            mission_finish_flag.data = true;
+            reach_pub.publish(mission_finish_flag);
             break;
         }
-        diff_controller(cur_pose); // track local goal with speed planning
+        if_apply_reversing = diff_controller(cur_pose); // track local goal with speed planning
         break;
     }
 
-    if (if_avoidance_enable_ && !xy_reached)
+    if (if_avoidance_enable_)
     {
         switch (mode)
         {
@@ -320,13 +323,14 @@ void pathTracking::timerCallback(const ros::TimerEvent &e)
             if (nearest_potential_obs > 0 && nearest_potential_obs <= obstacleAvoidancer_->emergency_stop_distance_)
             {
                 ROS_INFO_STREAM("[" << node_name << "]: Obstacle detected... emergency stop...");
+                ROS_INFO("nearest_potential_obs: %f", nearest_potential_obs);
                 stationaryChassis();                                         // switch to emergency mode
                 obstacleAvoidancer_->start_deadzone_time = ros::Time::now(); // and, start counting...
                 switchMode(MODE::EMERGENCY);
                 break;
             }
 
-            bool if_need_slow_down = (!xy_reached && nearest_potential_obs > obstacleAvoidancer_->emergency_stop_distance_ && nearest_potential_obs < obstacleAvoidancer_->slow_down_distance_) ? true : false;
+            bool if_need_slow_down = (!xy_reached && velocity.x != 0.0 && !if_apply_reversing && nearest_potential_obs > obstacleAvoidancer_->emergency_stop_distance_ && nearest_potential_obs < obstacleAvoidancer_->slow_down_distance_) ? true : false;
             if (obstacleAvoidancer_->obstacle_detected)
             {
                 double orignal_vel = velocity.x;
@@ -437,7 +441,7 @@ RobotPose pathTracking::rollingwindow(RobotPose cur, double lookahead_dist_)
     return lookahead_point_;
 }
 
-void pathTracking::diff_controller(RobotPose cur)
+bool pathTracking::diff_controller(RobotPose cur)
 {
     /*=====================================================================================
                         calculte linear velocity with speed planning Vt
@@ -532,22 +536,19 @@ void pathTracking::diff_controller(RobotPose cur)
     bool goalpose_is_nearing = (countdistance(cur, goal_pose) < 0.8) ? true : false;
     if (!xy_reached && turning_over_threshold) // && !goalpose_is_nearing
     {
-        ROS_INFO("processeing for curvature heuristic");
+        // ROS_INFO("processeing for curvature heuristic");
         apply_curvature_heuristic = true;
-        double original = velocity.x;
         double slow_linear_vel = velocity.x * (circularMotion_R / min_circularmotion_radius_);
         // velocity.x = (slow_linear_vel < max_sharp_turn_vel_) ? max_sharp_turn_vel_ : slow_linear_vel;
         // velocity.x = (velocity.x > linear_max_vel_) ? linear_max_vel_ : velocity.x;
         if (slow_linear_vel < min_sharp_turn_vel_)
-        {
-            ROS_INFO("curvature heuristic: %f ----*(%f)----> %f ----(min_sharp_turn) ---->%f", original, circularMotion_R / min_circularmotion_radius_, slow_linear_vel, min_sharp_turn_vel_);
             velocity.x = min_sharp_turn_vel_;
-        }
         else
-        {
             velocity.x = slow_linear_vel;
-            ROS_INFO("curvature heuristic: %f ----*(%f)----> %f", original, circularMotion_R / min_circularmotion_radius_, velocity.x);
-        }
+
+        // double original = velocity.x;
+        // ROS_INFO("curvature heuristic: %f ----*(%f)----> %f ----(min_sharp_turn) ---->%f", original, circularMotion_R / min_circularmotion_radius_, slow_linear_vel, min_sharp_turn_vel_);
+        // ROS_INFO("curvature heuristic: %f ----*(%f)----> %f", original, circularMotion_R / min_circularmotion_radius_, velocity.x);
     }
 
     /*=====================================================================================
@@ -639,6 +640,8 @@ void pathTracking::diff_controller(RobotPose cur)
 
     velocity.x *= go_forward_or_backward;
     velocity.theta *= rotate_direction;
+
+    return reversing_turning_first;
 }
 
 double pathTracking::speedPlanning(double last_vel, double peak_vel)
@@ -723,6 +726,7 @@ bool obstacleAvoidance::initializeParams(std_srvs::Empty::Request &req, std_srvs
     get_param_ok = nh_local_.param<double>("obstacle_resolution", obstacle_resolution_, 5.0);
 
     obs_sub = nh_.subscribe("/unilidar/scan", 1, &obstacleAvoidance::obstacleCallback, this);
+    le_obs_pub = nh_.advertise<geometry_msgs::PointStamped>("/lethal_obstacle", 10);
 
     if (get_param_ok)
     {
@@ -768,40 +772,53 @@ void obstacleAvoidance::obstacleCallback(const sensor_msgs::LaserScan::ConstPtr 
 
 double obstacleAvoidance::obstaclesFilter(RobotPose cur, bool if_reversing, double turning_threshold)
 {
+    turning_threshold = 20; // in deg
     // using laserscan
     sensor_msgs::LaserScan all_obs = all_obstacles;
     int all_obs_num = all_obs.ranges.size();
 
-    double lethal_obs_rad = angleLimiting(turning_threshold * M_PI / 180);
-    int lethal_obs_num = std::ceil(2 * lethal_obs_rad / all_obs.angle_increment);
-
-    double lethal_obs_max_dist = -1, index = -1;
+    int lethal_obs_min_index = -1, lethal_obs_num = std::ceil(2 * turning_threshold / 180 * M_PI / all_obs.angle_increment); // round up
+    double lethal_obs_min_dist = 100;
     for (int i = -lethal_obs_num / 2; i <= lethal_obs_num / 2; i++)
     {
-        int n = (if_reversing == false) ? i + all_obs_num / 2 : i + 0;
-        n = (n < 0) ? n + all_obs_num : n;
-        double lethal_obs_dist = ((lethal_obs_dist < 0 || lethal_obs_dist > all_obs.ranges.at(n)) && !isinf(all_obs.ranges.at(n))) ? all_obs.ranges.at(n) : lethal_obs_dist;
+        int n = (if_reversing == false) ? i + all_obs_num / 2 : (i < 0 ? i + all_obs_num : i);
+        double lethal_obs_dist = (!isinf(all_obs.ranges.at(n)) || all_obs.ranges.at(n) != all_obs.range_max) ? all_obs.ranges.at(n) : 100;
+        if (lethal_obs_dist != 100)
 
-        if (lethal_obs_dist > lethal_obs_max_dist)
-            index = n;
+            if (lethal_obs_dist < lethal_obs_min_dist && lethal_obs_dist <= slow_down_distance_)
+            {
+                lethal_obs_min_dist = lethal_obs_dist;
+                lethal_obs_min_index = n;
+            }
     }
-    if (lethal_obs_max_dist != -1)
+    if (lethal_obs_min_dist != 100 && lethal_obs_min_index != -1) // if lethal_obs_max_dist = 1, it means that there are no lethal obstacles.
     {
         // convert to RobotPose msg
         RobotPose lethal_obs; // relative to the robot
-        double a = index * all_obs.angle_increment;
-        lethal_obs.x = cos(a) * lethal_obs_max_dist;
-        lethal_obs.y = sin(a) * lethal_obs_max_dist;
-        lethal_obs.theta = lethal_obs_max_dist;
+        double a = lethal_obs_min_index * all_obs.angle_increment + M_PI;
+        lethal_obs.x = cos(a) * lethal_obs_min_dist;
+        lethal_obs.y = sin(a) * lethal_obs_min_dist;
+        lethal_obs.theta = lethal_obs_min_dist;
+        ROS_INFO("original lethal_obs:(%f, %f)", lethal_obs.x, lethal_obs.y);
 
-        // recalculate the obstacle pose (use obstacle reesolution)
-        int xx = (int)std::floor(lethal_obs.x / obstacle_resolution_);
-        int yy = (int)std::floor(lethal_obs.y / obstacle_resolution_);
-        lethal_obs.x = (xx > 0) ? xx * obstacle_resolution_ + cur.x : (xx + 1) * obstacle_resolution_ + cur.x;
-        lethal_obs.y = (yy > 0) ? yy * obstacle_resolution_ + cur.y : (yy + 1) * obstacle_resolution_ + cur.y;
-        lethal_obs_max_dist = countdistance(lethal_obs, cur) - obstacle_resolution_;
+        // // recalculate the obstacle pose (use obstacle reesolution)
+        // int xx = (int)std::floor(lethal_obs.x / obstacle_resolution_); // round down
+        // int yy = (int)std::floor(lethal_obs.y / obstacle_resolution_);
+        // lethal_obs.x = (xx > 0) ? xx * obstacle_resolution_ : (xx + 1) * obstacle_resolution_;
+        // lethal_obs.y = (yy > 0) ? yy * obstacle_resolution_ : (yy + 1) * obstacle_resolution_;
+        // lethal_obs_min_dist = sqrt(pow(lethal_obs.x, 2) + pow(lethal_obs.y, 2)) - obstacle_resolution_;
+
+        // ROS_INFO("lethal_obs:(%f, %f), dis from robot %f", lethal_obs.x, lethal_obs.y, lethal_obs_min_dist);
+        // for rviz display
+        geometry_msgs::PointStamped le_obs;
+        // le_obs.header.frame_id = "base_footprint";
+        le_obs.header.frame_id = "robot_0/base_footprint";
+        le_obs.header.stamp = ros::Time::now();
+        le_obs.point.x = lethal_obs.x;
+        le_obs.point.y = lethal_obs.y;
+        le_obs_pub.publish(le_obs);
     }
-    return lethal_obs_max_dist;
+    return lethal_obs_min_dist;
 }
 
 // double obstacleAvoidance::obstaclesFilter(RobotPose cur, bool if_reversing, double turning_threshold)

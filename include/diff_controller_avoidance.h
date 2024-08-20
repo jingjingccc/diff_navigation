@@ -54,6 +54,7 @@ private:
     ros::ServiceServer params_srv_;
     bool initializeParams(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
 
+    ros::Publisher le_obs_pub; // for rviz display
     ros::Subscriber obs_sub;
     void obstacleCallback(const sensor_msgs::LaserScan::ConstPtr &obs_msg);
     // void obstacleCallback(const obstacle_detector::Obstacles::ConstPtr &obs_msg);
@@ -96,14 +97,14 @@ private:
     // publisher
     ros::Publisher vel_pub;             // for chassis control
     ros::Publisher lookahead_point_pub; // for rviz display
-    ros::Publisher center_pub;          // for rviz display
     obstacleAvoidance *obstacleAvoidancer_;
+    ros::Publisher reach_pub;
 
     // subscriber
     ros::Subscriber pose_sub;
     // void poseCallback(const nav_msgs::Odometry::ConstPtr &msg); //base_pose_ground_truth
-    void poseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &pose_msg); // ekf_pose
-    // void poseCallback(const geometry_msgs::PoseStamped::ConstPtr &pose_msg); // tracked_pose // carto_pose
+    // void poseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &pose_msg); // ekf_pose
+    void poseCallback(const geometry_msgs::PoseStamped::ConstPtr &pose_msg); // tracked_pose // carto_pose
     ros::Subscriber goal_sub;
     void goalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg);
 
@@ -112,7 +113,7 @@ private:
     void timerCallback(const ros::TimerEvent &e);
     MODE mode, past_mode;
     void switchMode(MODE next);
-    void diff_controller(RobotPose cur);
+    bool diff_controller(RobotPose cur);
 
     RobotPose goal_pose, cur_pose;
     void pathRequest(RobotPose cur_, RobotPose goal_);

@@ -226,18 +226,15 @@ void pathTracking::timerCallback(const ros::TimerEvent &e)
     switch (mode)
     {
     case MODE::IDLE:
-        ROS_INFO("IDLE");
         velocity.x = 0;
         velocity.y = 0;
         velocity.theta = 0;
         publishVelocity(velocity);
         break;
     case MODE::PATH_RECEIVED:
-        ROS_INFO("PATH_RECEIVED");
         switchMode(MODE::TRACKING);
         break;
     case MODE::TRACKING:
-        ROS_INFO("TRACKING");
         if (if_xy_reached(cur_pose, goal_pose) && if_theta_reached(cur_pose, goal_pose)) // reached
         {
             velocity.x = 0;
@@ -358,7 +355,7 @@ void pathTracking::diff_controller(RobotPose localgoal, RobotPose cur)
         go_forward_or_backward = 1;
     else
         go_forward_or_backward = -1;
-    ROS_INFO("go_forward_or_backward  =  %d", go_forward_or_backward);
+    // ROS_INFO("go_forward_or_backward  =  %d", go_forward_or_backward);
 
     /*=====================================================================================
                                     determine localgoal_theta
@@ -385,7 +382,7 @@ void pathTracking::diff_controller(RobotPose localgoal, RobotPose cur)
         // if xy has reached, just turn around to meet the goal angle
         localgoal.theta = goal_pose.theta;
     }
-    ROS_INFO("localgoal = (%f %f %f)", localgoal.x, localgoal.y, localgoal.theta);
+    // ROS_INFO("localgoal = (%f %f %f)", localgoal.x, localgoal.y, localgoal.theta);
 
     /*=====================================================================================
                                 determine rotate direction
@@ -399,7 +396,7 @@ void pathTracking::diff_controller(RobotPose localgoal, RobotPose cur)
         rotate_direction = 1;
     else
         rotate_direction = -1;
-    ROS_INFO("rotate_direction  =  %d", rotate_direction);
+    // ROS_INFO("rotate_direction  =  %d", rotate_direction);
 
     // for rviz display "local_goal"
     geometry_msgs::PoseStamped local;
@@ -466,7 +463,7 @@ void pathTracking::diff_controller(RobotPose localgoal, RobotPose cur)
         }
     }
     velocity.theta *= rotate_direction;
-    ROS_INFO("R = %f => velocity = (%f, %f, %f)", circularMotion_R, velocity.x, velocity.y, velocity.theta);
+    // ROS_INFO("R = %f => velocity = (%f, %f, %f)", circularMotion_R, velocity.x, velocity.y, velocity.theta);
     publishVelocity(velocity);
 }
 

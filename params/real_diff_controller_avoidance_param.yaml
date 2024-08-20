@@ -11,8 +11,10 @@ min_sharp_turn_vel: 0.025
 
 # linear
 xy_tolerance: 0.08
-linear_max_vel: 0.6
-linear_acceleration: 0.2
+# linear_max_vel: 0.6
+# linear_acceleration: 0.2
+linear_max_vel: 0.4
+linear_acceleration: 0.15
 linear_kp: 0.65
 linear_brake_vel: 0.25
 linear_min_brake_distance: 0.35
@@ -20,8 +22,10 @@ linear_brake_distance_ratio: 0.35
 
 # angular
 theta_tolerance: 0.052 # 3 deg
-angular_max_vel: 0.8
-angular_acceleration: 0.4
+# angular_max_vel: 0.8
+# angular_acceleration: 0.4
+angular_max_vel: 0.5
+angular_acceleration: 0.25
 angular_acceleration_heuristic: 1.0
 angular_kp: 0.7
 angular_brake_distance: 0.15
@@ -33,5 +37,5 @@ deadzone_timeout: 5.0
 heuristic_a: 0.85
 min_slowdown_vel: 0.18
 min_slowdown_duration: 2.0
-obstacle_resolution: 0.15
+obstacle_resolution: 0.25
 

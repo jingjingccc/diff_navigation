@@ -4,6 +4,8 @@
 
 local_costmap:
   # Set the global and robot frame for the local costmap
+  # global_frame: robot_0/odom
+  # robot_base_frame: robot_0/base_footprint
   global_frame: odom
   robot_base_frame: base_footprint
 

@@ -1,18 +1,20 @@
 active: true
 control_frequency: 50
 
-lookahead_time: 2.0
+lookahead_time: 1.5
 min_lookahead_distance: 0.25
-max_lookahead_distance: 1.2
+max_lookahead_distance: 1.0
 
-sharp_turn_threshold: 1.57 # 45 deg (1.57) # 30 deg (0.523)
+# sharp_turn_threshold: 1.57 # 90 deg
+# sharp_turn_threshold: 0.523 # 30 deg (0.523)
+sharp_turn_threshold: 0.785 # 45 deg 
 min_circularmotion_radius: 0.4
 min_sharp_turn_vel: 0.025
 
 # linear
 xy_tolerance: 0.02
 linear_max_vel: 0.6
-linear_acceleration: 0.1
+linear_acceleration: 0.3
 linear_kp: 0.5
 linear_brake_vel: 0.25
 linear_min_brake_distance: 0.35
@@ -27,11 +29,54 @@ angular_kp: 0.7
 angular_brake_distance: 0.15
 
 # obstacle avoidance
-slow_down_distance: 3.0
-emergency_stop_distance: 1.2
+# slow_down_distance: 3.0
+# emergency_stop_distance: 1.2
 deadzone_timeout: 5.0
 heuristic_a: 0.85
 min_slowdown_vel: 0.18
 min_slowdown_duration: 2.0
 obstacle_resolution: 0.15
+slow_down_distance: 1.0
+emergency_stop_distance: 0.5
+
+
+
+# active: true
+# control_frequency: 50
+
+# lookahead_time: 2.0
+# min_lookahead_distance: 0.25
+# max_lookahead_distance: 1.2
+
+# sharp_turn_threshold: 1.57 # 45 deg (1.57) # 30 deg (0.523)
+# min_circularmotion_radius: 0.4
+# min_sharp_turn_vel: 0.025
+
+# # linear
+# xy_tolerance: 0.02
+# linear_max_vel: 0.6
+# linear_acceleration: 0.1
+# linear_kp: 0.5
+# linear_brake_vel: 0.25
+# linear_min_brake_distance: 0.35
+# linear_brake_distance_ratio: 0.35
+
+# # angular
+# theta_tolerance: 0.052 # 3 deg
+# angular_max_vel: 0.8
+# angular_acceleration: 0.4
+# angular_acceleration_heuristic: 1.0
+# angular_kp: 0.7
+# angular_brake_distance: 0.15
+
+# # obstacle avoidance
+# # slow_down_distance: 3.0
+# # emergency_stop_distance: 1.2
+# deadzone_timeout: 5.0
+# heuristic_a: 0.85
+# min_slowdown_vel: 0.18
+# min_slowdown_duration: 2.0
+# obstacle_resolution: 0.15
+# slow_down_distance: 1.5
+# emergency_stop_distance: 0.75
 
