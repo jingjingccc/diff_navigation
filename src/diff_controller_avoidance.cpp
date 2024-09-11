@@ -366,7 +366,10 @@ void pathTracking::timerCallback(const ros::TimerEvent &e)
         case MODE::EMERGENCY:
         { // if over dedzone_timeout, plan new Globalplanner
             if (ros::Time::now().toSec() - obstacleAvoidancer_->start_deadzone_time.toSec() < obstacleAvoidancer_->deadzone_timeout_)
-                stationaryChassis();
+            {
+                velocity.theta = 0.2;
+                // stationaryChassis();
+            }
             else
             {
                 pathRequest(cur_pose, goal_pose);
@@ -772,26 +775,29 @@ void obstacleAvoidance::obstacleCallback(const sensor_msgs::LaserScan::ConstPtr 
 
 double obstacleAvoidance::obstaclesFilter(RobotPose cur, bool if_reversing, double turning_threshold)
 {
-    turning_threshold = 20; // in deg
+    turning_threshold = 15; // in deg
     // using laserscan
     sensor_msgs::LaserScan all_obs = all_obstacles;
     int all_obs_num = all_obs.ranges.size();
 
     int lethal_obs_min_index = -1, lethal_obs_num = std::ceil(2 * turning_threshold / 180 * M_PI / all_obs.angle_increment); // round up
     double lethal_obs_min_dist = 100;
+    int count_point = 0;
     for (int i = -lethal_obs_num / 2; i <= lethal_obs_num / 2; i++)
     {
         int n = (if_reversing == false) ? i + all_obs_num / 2 : (i < 0 ? i + all_obs_num : i);
         double lethal_obs_dist = (!isinf(all_obs.ranges.at(n)) || all_obs.ranges.at(n) != all_obs.range_max) ? all_obs.ranges.at(n) : 100;
         if (lethal_obs_dist != 100)
-
+        {
+            count_point += 1;
             if (lethal_obs_dist < lethal_obs_min_dist && lethal_obs_dist <= slow_down_distance_)
             {
                 lethal_obs_min_dist = lethal_obs_dist;
                 lethal_obs_min_index = n;
             }
+        }
     }
-    if (lethal_obs_min_dist != 100 && lethal_obs_min_index != -1) // if lethal_obs_max_dist = 1, it means that there are no lethal obstacles.
+    if (lethal_obs_min_dist != 100 && lethal_obs_min_index != -1 && count_point >= 5) // if lethal_obs_max_dist = 1, it means that there are no lethal obstacles.
     {
         // convert to RobotPose msg
         RobotPose lethal_obs; // relative to the robot
@@ -852,12 +858,12 @@ RobotPose obstacleAvoidance::obstacleHeuristic(RobotPose cur_vel, double lethal_
     ==========================================================================*/
     // heuristic_vel.x = cur_vel.x * heuristic_a_; // original calculation
     // test 1
-    heuristic_vel.x = cur_vel.x * sqrt(abs(heuristic_a_ * (lethal_distance_ / slow_down_distance_)));
+    // heuristic_vel.x = cur_vel.x * sqrt(abs(heuristic_a_ * (lethal_distance_ / slow_down_distance_)));
     // test 2
     // heuristic_vel.x = cur_vel.x * heuristic_a_ * pow((lethal_distance_ / slow_down_distance_), 1 / 2);
     // test 3
     // heuristic_vel.x = cur_vel.x * sqrt(abs(heuristic_a_ * pow((lethal_distance_ / slow_down_distance_), 1 / 3)));
-
+    heuristic_vel.x = cur_vel.x * 0.925;
     /*==========================================================================)
                             limitation (min_slowdown_vel_)
     ==========================================================================*/

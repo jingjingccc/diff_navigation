@@ -2,8 +2,8 @@
 
     <!-- map_file -->
     <!-- <arg name="map_file" default="/home/jing/cartobot_ws/src/cartographer_ros/cartographer_ros/maps/PME_3F.yaml"/> -->
-    <!-- <arg name="map_file" default="/home/jing/Desktop/0724.yaml"/> -->
-    <arg name="map_file" default="$(find diff_navigation)/maps/0724_newnew.yaml"/>
+    <arg name="map_file" default="$(find diff_navigation)/maps/0904.yaml"/>
+    <!-- <arg name="map_file" default="$(find diff_navigation)/maps/PME_3F.yaml"/> -->
 
     
     <!-- map server -->
@@ -35,7 +35,7 @@
     </node> -->
 
     <node pkg="diff_navigation" type="diff_controller_avoidance" name="diff_controller_avoidance" output="screen">
-        <param name="if_avoidance_enable" value="false" />
+        <param name="if_avoidance_enable" value="true" />
         <param name="if_allow_reversing" value="false" />
         <rosparam file="$(find diff_navigation)/params/real_diff_controller_avoidance_param.yaml" command="load" />
     </node>
