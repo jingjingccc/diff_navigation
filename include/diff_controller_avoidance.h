@@ -23,7 +23,8 @@ enum class MODE
     IDLE,
     PATH_RECEIVED,
     TRACKING,
-    EMERGENCY,
+    EMERGENCY_RIGHT,
+    EMERGENCY_LEFT
     // TRANSITION
 };
 

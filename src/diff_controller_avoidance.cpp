@@ -1,3 +1,4 @@
+
 #include "diff_controller_avoidance.h"
 
 pathTracking::pathTracking(ros::NodeHandle &nh, ros::NodeHandle &nh_local)
@@ -320,16 +321,22 @@ void pathTracking::timerCallback(const ros::TimerEvent &e)
         {
             double nearest_potential_obs = obstacleAvoidancer_->obstaclesFilter(cur_pose, velocity.x > 0 ? false : true, sharp_turn_threshold_);
 
-            if (nearest_potential_obs > 0 && nearest_potential_obs <= obstacleAvoidancer_->emergency_stop_distance_)
+            if (nearest_potential_obs != 100 && fabs(nearest_potential_obs) <= obstacleAvoidancer_->emergency_stop_distance_)
             {
-                ROS_INFO_STREAM("[" << node_name << "]: Obstacle detected... emergency stop...");
+                // ROS_INFO_STREAM("[" << node_name << "]: Obstacle detected... emergency stop...");
+                ROS_INFO("!!! Obstacle detected... emergency stop... !!!");
                 ROS_INFO("nearest_potential_obs: %f", nearest_potential_obs);
                 stationaryChassis();                                         // switch to emergency mode
                 obstacleAvoidancer_->start_deadzone_time = ros::Time::now(); // and, start counting...
-                switchMode(MODE::EMERGENCY);
+                ROS_INFO("EMERGENCY DIRECTION: %f", nearest_potential_obs);
+                if(nearest_potential_obs > 0)
+                    switchMode(MODE::EMERGENCY_RIGHT);
+                else
+                    switchMode(MODE::EMERGENCY_LEFT);
                 break;
             }
-
+            
+            nearest_potential_obs = fabs(nearest_potential_obs);
             bool if_need_slow_down = (!xy_reached && velocity.x != 0.0 && !if_apply_reversing && nearest_potential_obs > obstacleAvoidancer_->emergency_stop_distance_ && nearest_potential_obs < obstacleAvoidancer_->slow_down_distance_) ? true : false;
             if (obstacleAvoidancer_->obstacle_detected)
             {
@@ -347,13 +354,13 @@ void pathTracking::timerCallback(const ros::TimerEvent &e)
                 // just for check out
                 if (orignal_vel != velocity.x)
                 {
-                    ROS_INFO_STREAM("[" << node_name << "]: Obstacle detected... slow down...");
-                    ROS_INFO("(%f --> %f)", orignal_vel, velocity.x);
+                    // ROS_INFO_STREAM("[" << node_name << "]: Obstacle detected... slow down...");
+                    // ROS_INFO("(%f --> %f)", orignal_vel, velocity.x);
                 }
             }
             else
             {
-                if (nearest_potential_obs < 0)
+                if (nearest_potential_obs == 100)
                     obstacleAvoidancer_->obstacle_detected = false;
                 else if (if_need_slow_down)
                 {
@@ -363,11 +370,12 @@ void pathTracking::timerCallback(const ros::TimerEvent &e)
             }
         }
         break;
-        case MODE::EMERGENCY:
+        case MODE::EMERGENCY_LEFT:
+        case MODE::EMERGENCY_RIGHT:
         { // if over dedzone_timeout, plan new Globalplanner
             if (ros::Time::now().toSec() - obstacleAvoidancer_->start_deadzone_time.toSec() < obstacleAvoidancer_->deadzone_timeout_)
             {
-                velocity.theta = 0.2;
+                velocity.theta = (mode == MODE::EMERGENCY_LEFT) ? -0.2 : 0.2;
                 // stationaryChassis();
             }
             else
@@ -782,14 +790,19 @@ double obstacleAvoidance::obstaclesFilter(RobotPose cur, bool if_reversing, doub
 
     int lethal_obs_min_index = -1, lethal_obs_num = std::ceil(2 * turning_threshold / 180 * M_PI / all_obs.angle_increment); // round up
     double lethal_obs_min_dist = 100;
-    int count_point = 0;
+    int count_point_left = 0, count_point_right = 0;
     for (int i = -lethal_obs_num / 2; i <= lethal_obs_num / 2; i++)
     {
         int n = (if_reversing == false) ? i + all_obs_num / 2 : (i < 0 ? i + all_obs_num : i);
         double lethal_obs_dist = (!isinf(all_obs.ranges.at(n)) || all_obs.ranges.at(n) != all_obs.range_max) ? all_obs.ranges.at(n) : 100;
         if (lethal_obs_dist != 100)
         {
-            count_point += 1;
+            if(lethal_obs_dist <= slow_down_distance_)
+            {   
+                count_point_right = (i<0)? count_point_right + 1: count_point_right;
+                count_point_left = (i>0)? count_point_left + 1: count_point_left;
+            }
+            
             if (lethal_obs_dist < lethal_obs_min_dist && lethal_obs_dist <= slow_down_distance_)
             {
                 lethal_obs_min_dist = lethal_obs_dist;
@@ -797,15 +810,17 @@ double obstacleAvoidance::obstaclesFilter(RobotPose cur, bool if_reversing, doub
             }
         }
     }
-    if (lethal_obs_min_dist != 100 && lethal_obs_min_index != -1 && count_point >= 5) // if lethal_obs_max_dist = 1, it means that there are no lethal obstacles.
+    
+    if (lethal_obs_min_dist != 100 && lethal_obs_min_index != -1 && count_point_left + count_point_right >= 5) // if lethal_obs_max_dist = 1, it means that there are no lethal obstacles.
     {
+        ROS_INFO("count point: left = %d / right = %d", count_point_left, count_point_right);
         // convert to RobotPose msg
         RobotPose lethal_obs; // relative to the robot
         double a = lethal_obs_min_index * all_obs.angle_increment + M_PI;
         lethal_obs.x = cos(a) * lethal_obs_min_dist;
         lethal_obs.y = sin(a) * lethal_obs_min_dist;
         lethal_obs.theta = lethal_obs_min_dist;
-        ROS_INFO("original lethal_obs:(%f, %f)", lethal_obs.x, lethal_obs.y);
+        // ROS_INFO("original lethal_obs:(%f, %f)", lethal_obs.x, lethal_obs.y);
 
         // // recalculate the obstacle pose (use obstacle reesolution)
         // int xx = (int)std::floor(lethal_obs.x / obstacle_resolution_); // round down
@@ -823,8 +838,15 @@ double obstacleAvoidance::obstaclesFilter(RobotPose cur, bool if_reversing, doub
         le_obs.point.x = lethal_obs.x;
         le_obs.point.y = lethal_obs.y;
         le_obs_pub.publish(le_obs);
+
+        lethal_obs_min_dist = count_point_left < count_point_right ? lethal_obs_min_dist : -lethal_obs_min_dist;
     }
-    return lethal_obs_min_dist;
+    else
+        lethal_obs_min_dist = 100;
+ 
+    return lethal_obs_min_dist; // if there are no obstacles return 100
+    // if obstacle at the right hand side, positive
+    // if obstacle at the left hand side, negative
 }
 
 // double obstacleAvoidance::obstaclesFilter(RobotPose cur, bool if_reversing, double turning_threshold)
@@ -863,7 +885,7 @@ RobotPose obstacleAvoidance::obstacleHeuristic(RobotPose cur_vel, double lethal_
     // heuristic_vel.x = cur_vel.x * heuristic_a_ * pow((lethal_distance_ / slow_down_distance_), 1 / 2);
     // test 3
     // heuristic_vel.x = cur_vel.x * sqrt(abs(heuristic_a_ * pow((lethal_distance_ / slow_down_distance_), 1 / 3)));
-    heuristic_vel.x = cur_vel.x * 0.925;
+    heuristic_vel.x = cur_vel.x * 0.95;
     /*==========================================================================)
                             limitation (min_slowdown_vel_)
     ==========================================================================*/
